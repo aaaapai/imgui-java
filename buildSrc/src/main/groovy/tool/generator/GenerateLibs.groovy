@@ -191,10 +191,10 @@ class GenerateLibs extends DefaultTask {
         }
 
         target.cppFlags += " -I$freetypeVendorDir/include"
-        target.libraries += ' -lfreetype'
         if (forAndroid) {
             target.linkerFlags += " -L${project.rootProject.file("$freetypeVendorDir/lib/\$(TARGET_ARCH_ABI)")}"
         } else target.linkerFlags += " -L${project.rootProject.file("$freetypeVendorDir/lib")}"
+        target.linkerFlags += ' -lfreetype'
     }
 
     void enableDefine(String define) {
