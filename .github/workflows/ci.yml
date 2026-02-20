@@ -1,4 +1,4 @@
-name: CI
+name: Android Build CI
 
 on:
   push:
@@ -11,55 +11,10 @@ on:
       - main
 
 jobs:
-  build-java:
-    name: Build Java
+  build-android:
+    name: Build Android Native
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          java-version: 8
-          distribution: liberica
-          cache: gradle
-
-      - name: Build
-        run: ./gradlew buildAll
-
-      # This helps to upload only jar files into the build artifact
-      - name: Copy Build Results to Temp
-        run: |
-          mkdir -p tmp/
-          cp imgui-app/build/libs/*.jar tmp/
-          cp imgui-binding/build/libs/*.jar tmp/
-          cp imgui-lwjgl3/build/libs/*.jar tmp/
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: java-libraries
-          path: tmp/*.jar
-
-  build-natives:
-    name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
-    needs: build-java
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - os: ubuntu-latest
-            type: linux
-          - os: ubuntu-latest
-            type: android
-          - os: ubuntu-latest
-            type: windows
-          - os: macos-latest
-            type: macos
-    runs-on: ${{ matrix.target.os }}
+    
     steps:
       - name: Checkout Repository and Submodules
         uses: actions/checkout@v4
@@ -74,68 +29,75 @@ jobs:
           distribution: liberica
           cache: gradle
 
-      - name: Install Dependencies (for Windows build)
-        if: matrix.target.type == 'windows'
-        run: sudo apt install mingw-w64
-
-      - name: Build
+      - name: Generate Libs
         run: |
-          export NDK_HOME=$ANDROID_NDK_LATEST_HOME
-          chmod +x buildSrc/scripts/build.sh
-          buildSrc/scripts/build.sh ${{ matrix.target.type }}
-
-      - name: Upload Artifacts
+          ./gradlew imgui-binding:generateLibs -Denvs=androidaarch64 -Dlocal
+          
+      - name: Modify Android.mk with Optimizations
+        run: |
+          cd imgui-binding/build/jni
+          
+          # 备份原文件
+          cp Android.mk Android.mk.bak
+          
+          # 添加优化标志 - 使用更可靠的方法
+          sed -i 's/LOCAL_CFLAGS := \(.*\)/LOCAL_CFLAGS := \1 -O3 -flto -mllvm -polly -w -fpermissive -D__ANDROID__/' Android.mk
+          
+          # 检查是否已经有APP_STL，没有则添加
+          if ! grep -q "APP_STL" Android.mk; then
+            echo "APP_STL := c++_static" >> Android.mk
+          fi
+          
+          # 添加链接器标志
+          sed -i '/LOCAL_LDFLAGS/d' Android.mk  # 删除现有行
+          sed -i '/include $(CLEAR_VARS)/a LOCAL_LDFLAGS := -flto -lc++_static -lc++abi -lc -lm -llog' Android.mk
+          
+          # 显示修改后的文件
+          echo "=== Modified Android.mk ==="
+          cat Android.mk
+          
+      - name: Build with NDK
+        run: |
+          cd imgui-binding/build/jni
+          
+          # 确保NDK环境变量
+          if [ -z "$ANDROID_NDK_LATEST_HOME" ]; then
+            echo "Error: ANDROID_NDK_LATEST_HOME not set"
+            exit 1
+          fi
+          
+          # 使用ndk-build构建
+          ${ANDROID_NDK_LATEST_HOME}/ndk-build -j4 APP_PLATFORM=android-24 APP_ABI=arm64-v8a
+          
+      - name: Verify Build Output
+        run: |
+          echo "=== Build Output ==="
+          find imgui-binding/build/libs -name "*.so" -type f | while read sofile; do
+            echo "Found: $sofile"
+            ls -la "$sofile"
+            # 检查是否包含我们的优化标志（可选）
+            ${ANDROID_NDK_LATEST_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf -p .comment "$sofile" 2>/dev/null || true
+          done
+          
+          # 创建输出目录
+          mkdir -p /tmp/android-build
+          cp $(find imgui-binding/build/libs -name "*.so" -type f) /tmp/android-build/ 2>/dev/null || true
+          
+      - name: Upload Android Native Library
         uses: actions/upload-artifact@v4
         with:
-          name: native-library-${{ matrix.target.type }}
-          path: /tmp/imgui/dst/
-
-  # This required to pack all native libraries into single archive
-  archive-natives:
-    name: Archive Natives
-    runs-on: ubuntu-latest
-    needs: build-natives
-    steps:
-      - name: Merge Artifacts
-        uses: actions/upload-artifact/merge@v4
+          name: android-native-library
+          path: /tmp/android-build/
+          retention-days: 30
+          if-no-files-found: error
+          
+      - name: Upload Full Build (for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: native-libraries
-          pattern: native-library-*
-
-  update-bin:
-    name: Update Binaries
-    if: github.ref == 'refs/heads/main' && !github.event.repository.fork # runs only on the main branch and not forks (sometimes people do PRs from the main branch)
-    runs-on: ubuntu-latest
-    needs: archive-natives
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: /tmp/artifacts
-
-      # Job compares sha1 hash of the imgui-binding/src/main directory.
-      # If there are any changes, then we update native libraries.
-      # We do not rely on git in terms of comparing binaries,
-      # since DLL files will always have versioning difference.
-      - name: Compare Binding Hash
-        id: cmp-binding-hash
-        continue-on-error: true
-        run: |
-          touch bin/binding.sha1
-          cat bin/binding.sha1 > /tmp/hash
-          find imgui-binding/src/main -type f -print0 | sort -z | xargs -0 sha1sum > bin/binding.sha1
-          cmp /tmp/hash bin/binding.sha1
-
-      - name: Update
-        if: steps.cmp-binding-hash.outcome != 'success'
-        run: mv /tmp/artifacts/native-libraries/* bin/
-
-      - name: Commit
-        if: steps.cmp-binding-hash.outcome != 'success'
-        uses: EndBug/add-and-commit@v9
-        with:
-          default_author: github_actions
-          message: '[ci skip] update native binaries'
+          name: android-build-full
+          path: |
+            imgui-binding/build/libs/
+            imgui-binding/build/jni/Android.mk
+            imgui-binding/build/jni/obj/
+          retention-days: 7
