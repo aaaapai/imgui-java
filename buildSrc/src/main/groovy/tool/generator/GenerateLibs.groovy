@@ -97,18 +97,6 @@ class GenerateLibs extends DefaultTask {
         def buildConfig = new BuildConfig('imgui-java', tmpDir, libsDirName, jniDir)
         BuildTarget[] buildTargets = []
 
-        if (forWindows) {
-            def win64 = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Windows, true)
-            addFreeTypeIfEnabled(win64)
-            buildTargets += win64
-        }
-
-        if (forLinux) {
-            def linux64 = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Linux, true)
-            addFreeTypeIfEnabled(linux64)
-            buildTargets += linux64
-        }
-
         if (forAndroid) {
             def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
             // Needed for ImPlot::AnnotateClamped
@@ -116,17 +104,9 @@ class GenerateLibs extends DefaultTask {
             androidTarget.cppFlags += " -Wno-format-security"
             // Needed for TextEditor and ImGuiFileDialog
             androidTarget.androidApplicationMk += ["APP_STL := c++_static"]
-            androidTarget.androidABIs = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"] // TODO: Add riscv64
+            androidTarget.androidABIs = ["arm64-v8a"] // TODO: Add riscv64
             addFreeTypeIfEnabled(androidTarget)
             buildTargets += androidTarget
-        }
-
-        if (forMac) {
-            buildTargets += createMacTarget(false)
-        }
-
-        if (forMacArm64) {
-            buildTargets += createMacTarget(true)
         }
 
         new AntScriptGenerator().generate(buildConfig, buildTargets)
@@ -136,28 +116,12 @@ class GenerateLibs extends DefaultTask {
 
         def commonParams = ['-v', '-Dhas-compiler=true', '-Drelease=true', 'clean', 'postcompile'] as String[]
 
-        if (forWindows)
-            BuildExecutor.executeAnt(jniDir + '/build-windows64.xml', commonParams)
-        if (forLinux)
-            BuildExecutor.executeAnt(jniDir + '/build-linux64.xml', commonParams)
         if (forAndroid) // Contrary to the name, this builds all four ABIs (arm64, arm, x86, x86_64)
             BuildExecutor.executeAnt(jniDir + '/build-android32.xml', commonParams)
-        if (forMac)
-            BuildExecutor.executeAnt(jniDir + '/build-macosx64.xml', commonParams)
-        if (forMacArm64)
-            BuildExecutor.executeAnt(jniDir + '/build-macosxarm64.xml', commonParams)
         // Exclude android because android packages into aar, not jar
         if (!forAndroid)
             BuildExecutor.executeAnt(jniDir + '/build.xml', '-v', 'pack-natives')
 
-        if (forWindows)
-            checkLibExist("windows64/imgui-java64.dll")
-        if (forLinux)
-            checkLibExist("linux64/libimgui-java64.so")
-        if (forMac)
-            checkLibExist("macosx64/libimgui-java64.dylib")
-        if (forMacArm64)
-            checkLibExist("macosxarm64/libimgui-java64.dylib")
     }
 
     void checkLibExist(String libName) {
@@ -166,17 +130,6 @@ class GenerateLibs extends DefaultTask {
             logger.error("Failed to build $libName!")
             throw new IllegalStateException("$path does not exist")
         }
-    }
-
-    BuildTarget createMacTarget(Boolean isArm) {
-        def minMacOsVersion = '10.15'
-        def macTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.MacOsX, true, isArm)
-        macTarget.libName = "libimgui-java64.dylib" // Lib for arm64 will be named the same for consistency.
-        macTarget.cppFlags += ' -std=c++14'
-        macTarget.cppFlags = macTarget.cppFlags.replace('10.7', minMacOsVersion)
-        macTarget.linkerFlags = macTarget.linkerFlags.replace('10.7', minMacOsVersion)
-        addFreeTypeIfEnabled(macTarget)
-        return macTarget
     }
 
     void addFreeTypeIfEnabled(BuildTarget target) {
