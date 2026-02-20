@@ -12,22 +12,15 @@ on:
 
 jobs:
   build-natives:
-  name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
-  needs: build-java
-  strategy:
+     name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
+     strategy:
       fail-fast: false
       matrix:
         target:
           - os: ubuntu-latest
-            type: linux
-          - os: ubuntu-latest
-            type: windows
-          - os: macos-latest
-            type: macos
-          - os: ubuntu-latest
             type: android-arm64
-    runs-on: ${{ matrix.target.os }}
-    steps:
+     runs-on: ${{ matrix.target.os }}
+     steps:
       - name: Checkout Repository and Submodules
         uses: actions/checkout@v5
         with:
