@@ -129,11 +129,9 @@ class GenerateLibs extends DefaultTask {
         }
 
         if (forAndroidAarch64) {
-            def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
-            // androidTarget.libName = "libimgui-java64.so"
-            // androidTarget.cppFlags += ' -std=c++14'
-            addFreeTypeIfEnabled(androidTarget)
-            buildTargets += androidTarget
+           def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
+           addFreeTypeIfEnabled(androidTarget)
+           buildTargets += androidTarget
         }
 
         new AntScriptGenerator().generate(buildConfig, buildTargets)
