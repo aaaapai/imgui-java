@@ -1,8 +1,6 @@
 package tool.generator
 
 import com.badlogic.gdx.jnigen.*
-import com.badlogic.gdx.utils.Architecture
-import com.badlogic.gdx.utils.Os
 import groovy.transform.CompileStatic
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.CopySpec
@@ -18,8 +16,8 @@ class GenerateLibs extends DefaultTask {
         'include/imgui-node-editor',
         'include/imguizmo',
         'include/implot',
-//        'include/ImGuiColorTextEdit',
-//        'include/ImGuiFileDialog',
+        'include/ImGuiColorTextEdit',
+        'include/ImGuiFileDialog',
         'include/imgui_club/imgui_memory_editor',
         'include/imgui-knobs'
     ]
@@ -35,12 +33,11 @@ class GenerateLibs extends DefaultTask {
     private final boolean forAndroid = buildEnvs?.contains('android')
     private final boolean forMac = buildEnvs?.contains('macos')
     private final boolean forMacArm64 = buildEnvs?.contains('macosarm64')
-    private final boolean forAndroidAarch64 = buildEnvs?.contains('androidaarch64')
 
     private final boolean isLocal = System.properties.containsKey('local')
     private final boolean withFreeType = Boolean.valueOf(System.properties.getProperty('freetype', 'false'))
 
-    private final String sourceDir = project.file('src/generated/java')
+    private final String sourceDir = project.file('src/main/java')
     private final String classpath = project.file('build/classes/java/main')
     private final String rootDir = (isLocal ? project.buildDir.path : '/tmp/imgui')
     private final String jniDir = "$rootDir/jni"
@@ -87,15 +84,7 @@ class GenerateLibs extends DefaultTask {
                 spec.from(project.rootProject.file('include/imgui/misc/freetype')) { CopySpec it -> it.include('*.h', '*.cpp') }
                 spec.into("$jniDir/misc/freetype")
             }
-
-            // Since we give a possibility to build library without enabled freetype - define should be set like that.
-            replaceSourceFileContent("imconfig.h", "//#define IMGUI_ENABLE_FREETYPE", "#define IMGUI_ENABLE_FREETYPE")
-
-            // Binding specific behavior to handle FreeType.
-            // By defining IMGUI_ENABLE_FREETYPE, Dear ImGui will default to using the FreeType font renderer.
-            // However, we modify the source code to ensure that, even with this, the STB_TrueType renderer is used instead.
-            // To use the FreeType font renderer, it must be explicitly forced on the atlas manually.
-            replaceSourceFileContent("imgui_draw.cpp", "ImGuiFreeType::GetBuilderForFreeType()", "ImFontAtlasGetBuilderForStbTruetype()")
+            enableDefine('IMGUI_ENABLE_FREETYPE')
         }
 
         // Copy dirent for ImGuiFileDialog
@@ -109,13 +98,13 @@ class GenerateLibs extends DefaultTask {
         BuildTarget[] buildTargets = []
 
         if (forWindows) {
-            def win64 = BuildTarget.newDefaultTarget(Os.Windows, Architecture.Bitness._64)
+            def win64 = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Windows, true)
             addFreeTypeIfEnabled(win64)
             buildTargets += win64
         }
 
         if (forLinux) {
-            def linux64 = BuildTarget.newDefaultTarget(Os.Linux, Architecture.Bitness._64)
+            def linux64 = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Linux, true)
             addFreeTypeIfEnabled(linux64)
             buildTargets += linux64
         }
@@ -133,21 +122,13 @@ class GenerateLibs extends DefaultTask {
         }
 
         if (forMac) {
-            buildTargets += createMacTarget(Architecture.x86)
+            buildTargets += createMacTarget(false)
         }
 
         if (forMacArm64) {
-            buildTargets += createMacTarget(Architecture.ARM)
+            buildTargets += createMacTarget(true)
         }
 
-        if (forAndroidAarch64) {
-            def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
-            // androidTarget.libName = "libimgui-java64.so"
-            // androidTarget.cppFlags += ' -std=c++14'
-            addFreeTypeIfEnabled(androidTarget)
-            buildTargets += androidTarget
-        }
-    
         new AntScriptGenerator().generate(buildConfig, buildTargets)
 
         // Generate native libraries
@@ -177,8 +158,6 @@ class GenerateLibs extends DefaultTask {
             checkLibExist("macosx64/libimgui-java64.dylib")
         if (forMacArm64)
             checkLibExist("macosxarm64/libimgui-java64.dylib")
-        if (forAndroidAarch64)
-            checkLibExist("linux64/libimgui-java64.so")
     }
 
     void checkLibExist(String libName) {
@@ -189,9 +168,9 @@ class GenerateLibs extends DefaultTask {
         }
     }
 
-    BuildTarget createMacTarget(Architecture arch) {
+    BuildTarget createMacTarget(Boolean isArm) {
         def minMacOsVersion = '10.15'
-        def macTarget = BuildTarget.newDefaultTarget(Os.MacOsX, Architecture.Bitness._64, arch)
+        def macTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.MacOsX, true, isArm)
         macTarget.libName = "libimgui-java64.dylib" // Lib for arm64 will be named the same for consistency.
         macTarget.cppFlags += ' -std=c++14'
         macTarget.cppFlags = macTarget.cppFlags.replace('10.7', minMacOsVersion)
@@ -218,13 +197,7 @@ class GenerateLibs extends DefaultTask {
         target.linkerFlags += ' -lfreetype'
     }
 
-    void replaceSourceFileContent(String fileName, String replaceWhat, String replaceWith) {
-        def sourceFile = new File("$jniDir/$fileName")
-        def sourceTxt = sourceFile.text
-        def sourceTxtModified = sourceTxt.replace(replaceWhat, replaceWith)
-        if (sourceTxt == sourceTxtModified) {
-            throw new IllegalStateException("Unable to replace [$fileName] with content [$replaceWith]!")
-        }
-        sourceFile.text = sourceTxtModified
+    void enableDefine(String define) {
+        new File("$jniDir/imconfig.h").text += "#define $define"
     }
 }
