@@ -11,40 +11,6 @@ on:
       - main
 
 jobs:
-  build-java:
-    name: Build Java
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 1
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: liberica
-          java-version: 17
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
-
-      - name: Build
-        run: ./gradlew buildAll
-
-      # This helps to upload only jar files into the build artifact
-      - name: Copy Build Results to Temp
-        run: |
-          mkdir -p tmp/
-          cp imgui-app/build/libs/*.jar tmp/
-          cp imgui-binding/build/libs/*.jar tmp/
-          cp imgui-lwjgl3/build/libs/*.jar tmp/
-
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v5
-        with:
-          name: java-libraries
-          path: tmp/*.jar
 
   build-natives:
     name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
