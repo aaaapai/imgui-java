@@ -34,6 +34,7 @@ class GenerateLibs extends DefaultTask {
     private final boolean forLinux = buildEnvs?.contains('linux')
     private final boolean forMac = buildEnvs?.contains('macos')
     private final boolean forMacArm64 = buildEnvs?.contains('macosarm64')
+    private final boolean forAndroidAarch64 = buildEnvs?.contains('androidaarch64')
 
     private final boolean isLocal = System.properties.containsKey('local')
     private final boolean withFreeType = Boolean.valueOf(System.properties.getProperty('freetype', 'false'))
@@ -126,6 +127,14 @@ class GenerateLibs extends DefaultTask {
             buildTargets += createMacTarget(Architecture.ARM)
         }
 
+        if (forAndroidAarch64) {
+            def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
+            // androidTarget.libName = "libimgui-java64.so"
+            // androidTarget.cppFlags += ' -std=c++14'
+            addFreeTypeIfEnabled(androidTarget)
+            buildTargets += androidTarget
+        }
+    
         new AntScriptGenerator().generate(buildConfig, buildTargets)
 
         // Generate native libraries
@@ -141,6 +150,9 @@ class GenerateLibs extends DefaultTask {
             BuildExecutor.executeAnt(jniDir + '/build-macosx64.xml', commonParams)
         if (forMacArm64)
             BuildExecutor.executeAnt(jniDir + '/build-macosxarm64.xml', commonParams)
+        if (forAndroidAarch64) {
+            BuildExecutor.executeAnt(jniDir + '/build-android32.xml', commonParams)
+        }
 
         BuildExecutor.executeAnt(jniDir + '/build.xml', '-v', 'pack-natives')
 
@@ -152,6 +164,8 @@ class GenerateLibs extends DefaultTask {
             checkLibExist("macosx64/libimgui-java64.dylib")
         if (forMacArm64)
             checkLibExist("macosxarm64/libimgui-java64.dylib")
+        if (forAndroidAarch64)
+            checkLibExist("linux64/libimgui-java64.so")
     }
 
     void checkLibExist(String libName) {
