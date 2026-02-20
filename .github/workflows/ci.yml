@@ -86,7 +86,7 @@ jobs:
           cd imgui-binding/build/jni
              
           # Build with ndk-build from environment
-          ${ANDROID_NDK_LATEST_HOME}/ndk-build
+          ${ANDROID_NDK_LATEST_HOME}/ndk-build -j4 APP_PLATFORM=android-24
           
           # Return to root directory
           cd ../../..
