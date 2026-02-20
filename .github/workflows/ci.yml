@@ -11,11 +11,10 @@ on:
       - main
 
 jobs:
-
   build-natives:
-    name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
-    needs: build-java
-    strategy:
+  name: Build Native (${{ matrix.target.os }} - ${{ matrix.target.type }})
+  needs: build-java
+  strategy:
       fail-fast: false
       matrix:
         target:
