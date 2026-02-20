@@ -16,18 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Setup Java
-        uses: actions/setup-java@main
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: liberica
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@main
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Build
         run: ./gradlew buildAll
@@ -41,7 +41,7 @@ jobs:
           cp imgui-lwjgl3/build/libs/*.jar tmp/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: java-libraries
           path: tmp/*.jar
@@ -54,23 +54,29 @@ jobs:
       matrix:
         target:
           - os: ubuntu-latest
+            type: linux
+          - os: ubuntu-latest
+            type: windows
+          - os: macos-latest
+            type: macos
+          - os: ubuntu-latest
             type: android-arm64
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Checkout Repository and Submodules
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           submodules: recursive
 
       - name: Setup Java
-        uses: actions/setup-java@main
+        uses: actions/setup-java@v4
         with:
-          distribution: temurin
+          distribution: liberica
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@main
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Install Dependencies (for Windows build)
         if: matrix.target.type == 'windows'
@@ -84,7 +90,12 @@ jobs:
           
           # Navigate to JNI directory
           cd imgui-binding/build/jni
-             
+          
+          # Find and modify Android.mk with optimization flags
+          sed -i 's/LOCAL_CFLAGS := \(.*\)/LOCAL_CFLAGS := \1 -O3 -mllvm -polly -flto -w -fpermissive/' Android.mk
+          echo "APP_STL := c++_static" >> Android.mk
+          echo "LOCAL_LDFLAGS := -flto -lc++_static -lc++abi -lc -lm -llog" >> Android.mk
+          
           # Build with ndk-build from environment
           ${ANDROID_NDK_LATEST_HOME}/ndk-build -j4 APP_PLATFORM=android-24
           
@@ -98,7 +109,7 @@ jobs:
           buildSrc/scripts/build.sh ${{ matrix.target.type }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@main
+        uses: actions/upload-artifact@v4
         with:
           name: native-library-${{ matrix.target.type }}
           path: /tmp/imgui/dst/
@@ -122,10 +133,10 @@ jobs:
     needs: archive-natives
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@main
+        uses: actions/checkout@v4
 
       - name: Download Artifacts
-        uses: actions/download-artifact@main
+        uses: actions/download-artifact@v4
         with:
           path: /tmp/artifacts
 
