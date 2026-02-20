@@ -16,18 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: liberica
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Build
         run: ./gradlew buildAll
@@ -41,7 +41,7 @@ jobs:
           cp imgui-lwjgl3/build/libs/*.jar tmp/
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: java-libraries
           path: tmp/*.jar
@@ -64,19 +64,19 @@ jobs:
     runs-on: ${{ matrix.target.os }}
     steps:
       - name: Checkout Repository and Submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
           submodules: recursive
 
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: liberica
           java-version: 17
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Install Dependencies (for Windows build)
         if: matrix.target.type == 'windows'
@@ -109,7 +109,7 @@ jobs:
           buildSrc/scripts/build.sh ${{ matrix.target.type }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: native-library-${{ matrix.target.type }}
           path: /tmp/imgui/dst/
@@ -121,7 +121,7 @@ jobs:
     needs: build-natives
     steps:
       - name: Merge Artifacts
-        uses: actions/upload-artifact/merge@v4
+        uses: actions/upload-artifact/merge@v5
         with:
           name: native-libraries
           pattern: native-library-*
@@ -133,10 +133,10 @@ jobs:
     needs: archive-natives
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v6
         with:
           path: /tmp/artifacts
 
