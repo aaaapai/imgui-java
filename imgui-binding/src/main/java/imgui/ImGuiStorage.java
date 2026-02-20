@@ -1,6 +1,9 @@
 package imgui;
 
 import imgui.binding.ImGuiStructDestroyable;
+import imgui.binding.annotation.BindingMethod;
+import imgui.binding.annotation.BindingSource;
+import imgui.binding.annotation.OptArg;
 
 /**
  * Helper: Key-Value storage
@@ -12,84 +15,68 @@ import imgui.binding.ImGuiStructDestroyable;
  * - You want to store custom debug data easily without adding or editing structures in your code (probably not efficient, but convenient)
  * Types are NOT stored, so it is up to you to make sure your Key don't collide with different types.
  */
+@BindingSource
 public final class ImGuiStorage extends ImGuiStructDestroyable {
     public ImGuiStorage() {
+        super();
     }
 
     public ImGuiStorage(final long ptr) {
         super(ptr);
     }
 
-    /*JNI
-        #include "_common.h"
-
-        #define IMGUI_STORAGE ((ImGuiStorage*)STRUCT_PTR)
-     */
-
     @Override
     protected long create() {
         return nCreate();
     }
 
+    /*JNI
+        #include "_common.h"
+        #define THIS ((ImGuiStorage*)STRUCT_PTR)
+     */
+
     private native long nCreate(); /*
-        return (intptr_t)(new ImGuiStorage());
+        return (uintptr_t)(new ImGuiStorage());
     */
 
     // - Get***() functions find pair, never add/allocate. Pairs are sorted so a query is O(log N)
     // - Set***() functions find pair, insertion on demand if missing.
     // - Sorted insertion is costly, paid once. A typical frame shouldn't need to insert any new pair.
 
-    public native void clear(); /*
-        IMGUI_STORAGE->Clear();
-    */
+    @BindingMethod
+    public native void Clear();
 
-    public native int getInt(int imGuiID); /*
-        return IMGUI_STORAGE->GetInt(imGuiID);
-    */
+    @BindingMethod
+    public native int GetInt(int key, @OptArg int defaultVal);
 
-    public native int getInt(int imGuiID, int defaultVal); /*
-        return IMGUI_STORAGE->GetInt(imGuiID, defaultVal);
-    */
+    @BindingMethod
+    public native void SetInt(int key, int val);
 
-    public native void setInt(int imGuiID, int val); /*
-        IMGUI_STORAGE->SetInt(imGuiID, val);
-    */
+    @BindingMethod
+    public native boolean GetBool(int key, @OptArg boolean defaultVal);
 
-    public native boolean getBool(int imGuiID); /*
-        return IMGUI_STORAGE->GetBool(imGuiID);
-    */
+    @BindingMethod
+    public native void SetBool(int key, boolean val);
 
-    public native boolean getBool(int imGuiID, boolean defaultVal); /*
-        return IMGUI_STORAGE->GetBool(imGuiID, defaultVal);
-    */
+    @BindingMethod
+    public native float GetFloat(int key, @OptArg float defaultVal);
 
-    public native void setBool(int imGuiID, boolean val); /*
-        IMGUI_STORAGE->SetBool(imGuiID, val);
-    */
-
-    public native float getFloat(int imGuiID); /*
-        return IMGUI_STORAGE->GetFloat(imGuiID);
-    */
-
-    public native float getFloat(int imGuiID, float defaultVal); /*
-        return IMGUI_STORAGE->GetFloat(imGuiID, defaultVal);
-    */
-
-    public native void setFloat(int imGuiID, float val); /*
-        IMGUI_STORAGE->SetFloat(imGuiID, val);
-    */
-
-    /**
-     * Use on your own storage if you know only integer are being stored (open/close all tree nodes)
-     */
-    public native void setAllInt(int val); /*
-        IMGUI_STORAGE->SetAllInt(val);
-    */
+    @BindingMethod
+    public native void SetFloat(int key, float val);
 
     /**
      * For quicker full rebuild of a storage (instead of an incremental one), you may add all your contents and then sort once.
      */
-    public native void buildSortByKey(); /*
-        IMGUI_STORAGE->BuildSortByKey();
-    */
+    @BindingMethod
+    public native void BuildSortByKey();
+
+    /**
+     * Use on your own storage if you know only integer are being stored (open/close all tree nodes)
+     */
+    @BindingMethod
+    public native void SetAllInt(int val);
+
+    /*JNI
+        #undef THIS
+     */
 }

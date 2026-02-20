@@ -1,37 +1,64 @@
 package imgui.extension.nodeditor;
 
 import imgui.binding.ImGuiStructDestroyable;
+import imgui.binding.annotation.BindingField;
+import imgui.binding.annotation.BindingSource;
+import imgui.binding.annotation.ReturnValue;
 
+@BindingSource
 public final class NodeEditorConfig extends ImGuiStructDestroyable {
-    public NodeEditorConfig() {
-    }
-
-    public NodeEditorConfig(final long ptr) {
-        super(ptr);
-    }
-
-    /*JNI
-        #include "_nodeeditor.h"
-
-        namespace ed = ax::NodeEditor;
-
-        #define IM_NODE_EDITOR_CONFIG ((ed::Config*)STRUCT_PTR)
-     */
-
     @Override
     protected long create() {
         return nCreate();
     }
 
+    /*JNI
+        #include "_nodeeditor.h"
+        #define THIS ((ax::NodeEditor::Config*)STRUCT_PTR)
+     */
+
     private native long nCreate(); /*
-        return (intptr_t)(new ed::Config());
+        return (uintptr_t)(new ax::NodeEditor::Config());
     */
 
-    public native String getSettingsFile(); /*
-        return env->NewStringUTF(IM_NODE_EDITOR_CONFIG->SettingsFile);
+    @BindingField
+    public String SettingsFile;
+
+    public int getCanvasSizeMode() {
+        return nGetCanvasSizeMode();
+    }
+
+    public void setCanvasSizeMode(final int value) {
+        nSetCanvasSizeMode(value);
+    }
+
+    public native int nGetCanvasSizeMode(); /*
+        return static_cast<int>(THIS->CanvasSizeMode);
     */
 
-    public native void setSettingsFile(String settingsFile); /*MANUAL
-        IM_NODE_EDITOR_CONFIG->SettingsFile = obj_settingsFile == NULL ? NULL : (char*)env->GetStringUTFChars(obj_settingsFile, JNI_FALSE);
+    public native void nSetCanvasSizeMode(int value); /*
+        THIS->CanvasSizeMode = static_cast<ax::NodeEditor::CanvasSizeMode>(value);
     */
+
+    @BindingField
+    public int DragButtonIndex;
+
+    @BindingField
+    public int SelectButtonIndex;
+
+    @BindingField
+    public int NavigateButtonIndex;
+
+    @BindingField
+    public int ContextMenuButtonIndex;
+
+    @BindingField
+    public boolean EnableSmoothZoom;
+
+    @BindingField
+    public float SmoothZoomPower;
+
+    /*JNI
+        #undef THIS
+     */
 }

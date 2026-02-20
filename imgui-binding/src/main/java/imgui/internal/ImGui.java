@@ -1,46 +1,281 @@
 package imgui.internal;
 
+import imgui.ImDrawList;
+import imgui.ImFont;
+import imgui.ImGuiPlatformMonitor;
+import imgui.ImGuiViewport;
 import imgui.ImVec2;
+import imgui.ImVec4;
+import imgui.binding.annotation.ArgValue;
+import imgui.binding.annotation.BindingMethod;
+import imgui.binding.annotation.BindingSource;
+import imgui.binding.annotation.OptArg;
+import imgui.type.ImBoolean;
 import imgui.type.ImFloat;
 import imgui.type.ImInt;
 
+@BindingSource
 public final class ImGui extends imgui.ImGui {
-    private static final ImGuiDockNode DOCK_NODE = new ImGuiDockNode(0);
-
-    private static final ImGuiWindow IMGUI_CURRENT_WINDOW = new ImGuiWindow(0);
-
     /*JNI
         #include "_common.h"
-        #include <imgui_internal.h>
+        #include "_internal.h"
      */
+
+    static {
+        nInit();
+    }
+
+    public static void init() {
+    }
+
+    private static native void nInit(); /*
+        Jni::InitInternal(env);
+    */
+
+    // Windows
+    // We should always have a CurrentWindow in the stack (there is an implicit "Debug" window)
+    // If this ever crash because g.CurrentWindow is NULL it means that either
+    // - ImGui::NewFrame() has never been called, which is illegal.
+    // - You are calling ImGui functions after ImGui::EndFrame()/ImGui::Render() and before the next ImGui::NewFrame(), which is also illegal.
+
+    @BindingMethod
+    public static native ImGuiWindow GetCurrentWindowRead();
+
+    @BindingMethod
+    public static native ImGuiWindow GetCurrentWindow();
+
+    @BindingMethod
+    public static native ImGuiWindow FindWindowByID(int id);
+
+    @BindingMethod
+    public static native ImGuiWindow FindWindowByName(String name);
+
+    @BindingMethod
+    public static native void UpdateWindowParentAndRootLinks(ImGuiWindow window, int flags, ImGuiWindow parentWindow);
+
+    @BindingMethod
+    public static native ImVec2 CalcWindowNextAutoFitSize(ImGuiWindow window);
+
+    @BindingMethod
+    public static native boolean IsWindowChildOf(ImGuiWindow window, ImGuiWindow potentialParent, boolean popupHierarchy, boolean dockHierarchy);
+
+    @BindingMethod
+    public static native boolean IsWindowWithinBeginStackOf(ImGuiWindow window, ImGuiWindow potentialParent);
+
+    @BindingMethod
+    public static native boolean IsWindowAbove(ImGuiWindow potentialAbove, ImGuiWindow potentialBelow);
+
+    @BindingMethod
+    public static native boolean IsWindowNavFocusable(ImGuiWindow window);
+
+    @BindingMethod
+    public static native void SetWindowPos(ImGuiWindow window, ImVec2 pos, @OptArg int cond);
+
+    @BindingMethod
+    public static native void SetWindowSize(ImGuiWindow window, ImVec2 size, @OptArg int cond);
+
+    @BindingMethod
+    public static native void SetWindowCollapsed(ImGuiWindow window, @ArgValue(staticCast = "bool") boolean collapsed, @OptArg int cond);
+
+    @BindingMethod
+    public static native void SetWindowHitTestHole(ImGuiWindow window, ImVec2 pos, ImVec2 size);
+
+    @BindingMethod
+    public static native ImRect WindowRectAbsToRel(ImGuiWindow window, ImRect r);
+
+    @BindingMethod
+    public static native ImRect WindowRectRelToAbs(ImGuiWindow window, ImRect r);
+
+
+    // Windows: Display Order and Focus Order
+
+    @BindingMethod
+    public static native void FocusWindow(ImGuiWindow window, @OptArg @ArgValue(staticCast = "ImGuiFocusRequestFlags") int flags);
+
+    @BindingMethod
+    public static native void FocusTopMostWindowUnderOne(ImGuiWindow underThisWindow, ImGuiWindow ignoreWindow, ImGuiViewport filterViewport, @ArgValue(staticCast = "ImGuiFocusRequestFlags") int flags);
+
+    @BindingMethod
+    public static native void BringWindowToFocusFront(ImGuiWindow window);
+
+    @BindingMethod
+    public static native void BringWindowToDisplayFront(ImGuiWindow window);
+
+    @BindingMethod
+    public static native void BringWindowToDisplayBack(ImGuiWindow window);
+
+    @BindingMethod
+    public static native void BringWindowToDisplayBehind(ImGuiWindow window, ImGuiWindow aboveWindow);
+
+    @BindingMethod
+    public static native int FindWindowDisplayIndex(ImGuiWindow window);
+
+    @BindingMethod
+    public static native ImGuiWindow FindBottomMostVisibleWindowWithinBeginStack(ImGuiWindow window);
+
+    // Fonts, drawing
+
+    @BindingMethod
+    public static native void SetCurrentFont(ImFont font);
+
+    @BindingMethod
+    public static native ImFont GetDefaultFont();
+
+    @BindingMethod
+    public static native ImDrawList GetForegroundDrawList(ImGuiWindow window);
+
+    // Init
+
+    @BindingMethod
+    public static native void Initialize();
+
+    @BindingMethod
+    public static native void Shutdown();
+
+    // NewFrame
+
+    @BindingMethod
+    public static native void UpdateInputEvents(boolean trickleFastInputs);
+
+    @BindingMethod
+    public static native void UpdateHoveredWindowAndCaptureFlags();
+
+    @BindingMethod
+    public static native void StartMouseMovingWindow(ImGuiWindow window);
+
+    @BindingMethod
+    public static native void StartMouseMovingWindowOrNode(ImGuiWindow window, ImGuiDockNode node, boolean undockFloatingNode);
+
+    @BindingMethod
+    public static native void UpdateMouseMovingWindowNewFrame();
+
+    @BindingMethod
+    public static native void UpdateMouseMovingWindowEndFrame();
+
+    // TODO: Generic context hooks
+
+    // Viewports
+
+    @BindingMethod
+    public static native ImGuiPlatformMonitor GetViewportPlatformMonitor(ImGuiViewport viewport);
+
+    // TODO: Settings
+
+    // Scrolling
+
+    @BindingMethod
+    public static native void SetNextWindowScroll(ImVec2 scroll);
+
+    @BindingMethod
+    public static native void SetScrollX(ImGuiWindow window, float scrollX);
+
+    @BindingMethod
+    public static native void SetScrollY(ImGuiWindow window, float scrollY);
+
+    @BindingMethod
+    public static native void SetScrollFromPosX(ImGuiWindow window, float localX, float centerXRatio);
+
+    @BindingMethod
+    public static native void SetScrollFromPosY(ImGuiWindow window, float localY, float centerYRatio);
+
+    // Early work-in-progress API (ScrollToItem() will become public)
+
+    @BindingMethod
+    public static native void ScrollToItem(@OptArg int flags);
+
+    @BindingMethod
+    public static native void ScrollToRect(ImGuiWindow window, ImRect rect, @OptArg int flags);
+
+    @BindingMethod
+    public static native ImVec2 ScrollToRectEx(ImGuiWindow window, ImRect rect, @OptArg int flags);
+
+    // Basic Accessors
+
+    @BindingMethod
+    public static native int GetItemStatusFlags();
+
+    @BindingMethod
+    public static native int GetItemFlags();
+
+    @BindingMethod
+    public static native int GetActiveID();
+
+    @BindingMethod
+    public static native int GetFocusID();
+
+    @BindingMethod
+    public static native void SetActiveID(int id, ImGuiWindow window);
+
+    @BindingMethod
+    public static native void SetFocusID(int id, ImGuiWindow window);
+
+    @BindingMethod
+    public static native void ClearActiveID();
+
+    @BindingMethod
+    public static native int GetHoveredID();
+
+    @BindingMethod
+    public static native void SetHoveredID(int id);
+
+    @BindingMethod
+    public static native void KeepAliveID(int id);
+
+    @BindingMethod
+    public static native void MarkItemEdited(int id);
+
+    @BindingMethod
+    public static native void PushOverrideID(int id);
+
+    @BindingMethod
+    public static native int GetIDWithSeed(String strIdBegin, String strIdEnd, int seed);
 
     // Basic Helpers for widget code
 
-    public static ImVec2 calcItemSize(float sizeX, float sizeY, float defaultW, float defaultH) {
-        final ImVec2 value = new ImVec2();
-        calcItemSize(sizeX, sizeY, defaultW, defaultH, value);
-        return value;
-    }
+    @BindingMethod
+    public static native void ItemSize(ImVec2 size, @OptArg float textBaselineY);
 
-    public static native void calcItemSize(float sizeX, float sizeY, float defaultW, float defaultH, ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::CalcItemSize(ImVec2(sizeX, sizeY), defaultW, defaultH), dstImVec2);
-    */
+    @BindingMethod
+    public static native void ItemSize(ImRect bb, @OptArg float textBaselineY);
 
-    public static native float calcItemSizeX(float sizeX, float sizeY, float defaultW, float defaultH); /*
-        return ImGui::CalcItemSize(ImVec2(sizeX, sizeY), defaultW, defaultH).x;
-    */
+    // TODO: ItemAdd
 
-    public static native float calcItemSizeY(float sizeX, float sizeY, float defaultW, float defaultH); /*
-        return ImGui::CalcItemSize(ImVec2(sizeX, sizeY), defaultW, defaultH).y;
-    */
+    @BindingMethod
+    public static native boolean ItemHoverable(ImRect bb, int id, @ArgValue(staticCast = "ImGuiItemFlags") int itemFlags);
 
-    public static native void pushItemFlag(int imGuiItemFlags, boolean enabled); /*
-        ImGui::PushItemFlag(imGuiItemFlags, enabled);
-    */
+    @BindingMethod
+    public static native boolean IsWindowContentHoverable(ImGuiWindow window, @ArgValue(staticCast = "ImGuiHoveredFlags") int flags);
 
-    public static native void popItemFlag(); /*
-        ImGui::PopItemFlag();
-    */
+    @BindingMethod
+    public static native boolean IsClippedEx(ImRect bb, int id);
+
+    @BindingMethod
+    public static native void SetLastItemData(int itemId, int inFlags, int statusFlags, ImRect itemRect);
+
+    @BindingMethod
+    public static native ImVec2 CalcItemSize(ImVec2 size, float defaultW, float defaultH);
+
+    @BindingMethod
+    public static native float CalcWrapWidthForPos(ImVec2 pos, float wrapPosX);
+
+    @BindingMethod
+    public static native void PushMultiItemsWidths(int components, float widthFull);
+
+    @BindingMethod
+    public static native boolean IsItemToggledSelection();
+
+    @BindingMethod
+    public static native ImVec2 GetContentRegionMaxAbs();
+
+    // TODO: ShrinkWidths
+
+    // Parameter stacks
+
+    @BindingMethod
+    public static native void PushItemFlag(int option, boolean enabled);
+
+    @BindingMethod
+    public static native void PopItemFlag();
 
     // Docking - Builder function needs to be generally called before the node is used/submitted.
     // - The DockBuilderXXX functions are designed to _eventually_ become a public API, but it is too early to expose it and guarantee stability.
@@ -52,147 +287,149 @@ public final class ImGui extends imgui.ImGui {
     //   to call DockBuilderSetNodeSize() beforehand. If you don't, the resulting split sizes may not be reliable.
     // - Call DockBuilderFinish() after you are done.
 
-    public static native void dockBuilderDockWindow(String windowName, int nodeId); /*
-        ImGui::DockBuilderDockWindow(windowName, nodeId);
-    */
+    @BindingMethod
+    public static native void DockBuilderDockWindow(String windowName, int nodeId);
 
-    public static ImGuiDockNode dockBuilderGetNode(final int nodeId) {
-        DOCK_NODE.ptr = nDockBuilderGetNode(nodeId);
-        return DOCK_NODE;
-    }
+    @BindingMethod
+    public static native ImGuiDockNode DockBuilderGetNode(int nodeId);
 
-    private static native long nDockBuilderGetNode(int nodeId); /*
-        return (intptr_t)ImGui::DockBuilderGetNode(nodeId);
-    */
+    @BindingMethod
+    public static native ImGuiDockNode DockBuilderGetCentralNode(int nodeId);
 
-    public static ImGuiDockNode dockBuilderGetCentralNode(final int nodeId) {
-        DOCK_NODE.ptr = nDockBuilderGetCentralNode(nodeId);
-        return DOCK_NODE;
-    }
-
-    private static native long nDockBuilderGetCentralNode(int nodeId); /*
-        return (intptr_t)ImGui::DockBuilderGetCentralNode(nodeId);
-    */
-
-    public static native int dockBuilderAddNode(); /*
-        return ImGui::DockBuilderAddNode();
-    */
-
-    public static native int dockBuilderAddNode(int nodeId); /*
-        return ImGui::DockBuilderAddNode(nodeId);
-    */
-
-    public static native int dockBuilderAddNode(int nodeId, int flags); /*
-        return ImGui::DockBuilderAddNode(nodeId, flags);
-    */
+    @BindingMethod
+    public static native int DockBuilderAddNode(@OptArg int nodeId, @OptArg int flags);
 
     /**
      * Remove node and all its child, undock all windows.
      */
-    public static native void dockBuilderRemoveNode(int nodeId); /*
-        ImGui::DockBuilderRemoveNode(nodeId);
-    */
+    @BindingMethod
+    public static native void DockBuilderRemoveNode(int nodeId);
 
-    public static native void dockBuilderRemoveNodeDockedWindows(int nodeId); /*
-        ImGui::DockBuilderRemoveNodeDockedWindows(nodeId);
-    */
-
-    public static native void dockBuilderRemoveNodeDockedWindows(int nodeId, boolean clearSettingsRefs); /*
-        ImGui::DockBuilderRemoveNodeDockedWindows(nodeId, clearSettingsRefs);
-    */
+    @BindingMethod
+    public static native void DockBuilderRemoveNodeDockedWindows(int nodeId, @OptArg boolean clearSettingsRefs);
 
     /**
      * Remove all split/hierarchy. All remaining docked windows will be re-docked to the remaining root node (node_id).
      */
-    public static native void dockBuilderRemoveNodeChildNodes(int nodeId); /*
-        ImGui::DockBuilderRemoveNodeChildNodes(nodeId);
-    */
+    @BindingMethod
+    public static native void DockBuilderRemoveNodeChildNodes(int nodeId);
 
-    public static native void dockBuilderSetNodePos(int nodeId, float posX, float posY); /*
-        ImGui::DockBuilderSetNodePos(nodeId, ImVec2(posX, posY));
-    */
+    @BindingMethod
+    public static native void DockBuilderSetNodePos(int nodeId, ImVec2 pos);
 
-    public static native void dockBuilderSetNodeSize(int nodeId, float sizeX, float sizeY); /*
-        ImGui::DockBuilderSetNodeSize(nodeId, ImVec2(sizeX, sizeY));
-    */
+    @BindingMethod
+    public static native void DockBuilderSetNodeSize(int nodeId, ImVec2 size);
 
     /**
      * Create 2 child nodes in this parent node.
      */
-    public static int dockBuilderSplitNode(int nodeId, int splitDir, float sizeRatioForNodeAtDir, ImInt outIdAtDir, ImInt outIdAtOppositeDir) {
-        if (outIdAtDir == null && outIdAtOppositeDir != null) {
-            return nDockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, 0, outIdAtOppositeDir.getData());
-        } else if (outIdAtDir != null && outIdAtOppositeDir == null) {
-            return nDockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, outIdAtDir.getData());
-        } else if (outIdAtDir != null) {
-            return nDockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, outIdAtDir.getData(), outIdAtOppositeDir.getData());
-        } else {
-            return nDockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir);
-        }
-    }
-
-    private static native int nDockBuilderSplitNode(int nodeId, int splitDir, float sizeRatioForNodeAtDir, int[] outIdAtDir, int[] outIdAtOppositeDir); /*
-        return ImGui::DockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, (ImGuiID*)&outIdAtDir[0], (ImGuiID*)&outIdAtOppositeDir[0]);
-    */
-
-    private static native int nDockBuilderSplitNode(int nodeId, int splitDir, float sizeRatioForNodeAtDir); /*
-        return ImGui::DockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, NULL, NULL);
-    */
-
-    private static native int nDockBuilderSplitNode(int nodeId, int splitDir, float sizeRatioForNodeAtDir, int[] outIdAtDir); /*
-        return ImGui::DockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, (ImGuiID*)&outIdAtDir[0], NULL);
-    */
-
-    private static native int nDockBuilderSplitNode(int nodeId, int splitDir, float sizeRatioForNodeAtDir, int o, int[] outIdAtOppositeDir); /*
-        return ImGui::DockBuilderSplitNode(nodeId, splitDir, sizeRatioForNodeAtDir, NULL, (ImGuiID*)&outIdAtOppositeDir[0]);
-    */
+    @BindingMethod
+    public static native int DockBuilderSplitNode(int nodeId, @ArgValue(staticCast = "ImGuiDir") int splitDir, float sizeRatioForNodeAtDir, @ArgValue(reinterpretCast = "ImGuiID*") ImInt outIdAtDir, @ArgValue(reinterpretCast = "ImGuiID*") ImInt outIdAtOppositeDir);
 
     // TODO DockBuilderCopyDockSpace, DockBuilderCopyNode
 
-    public static native void dockBuilderCopyWindowSettings(String srcName, String dstName); /*
-        ImGui::DockBuilderCopyWindowSettings(srcName, dstName);
-    */
+    @BindingMethod
+    public static native void DockBuilderCopyWindowSettings(String srcName, String dstName);
 
-    public static native void dockBuilderFinish(int nodeId); /*
-        ImGui::DockBuilderFinish(nodeId);
-    */
+    @BindingMethod
+    public static native void DockBuilderFinish(int nodeId);
+
+    // Tables: Candidates for public API
+
+    @BindingMethod
+    public static native void TableOpenContextMenu(@OptArg int columnN);
+
+    @BindingMethod
+    public static native void TableSetColumnWidth(int columnN, float width);
+
+    @BindingMethod
+    public static native void TableSetColumnSortDirection(int columnN, @ArgValue(staticCast = "ImGuiSortDirection") int sortDirection, boolean appendToSortSpecs);
+
+    /**
+     * May use {@code (TableGetColumnFlags() & ImGuiTableColumnFlags_IsHovered)} instead. Return hovered column.
+     * Return -1 when table is not hovered. return columns_count if the unused space at the right of visible columns is hovered.
+     */
+    @BindingMethod
+    public static native int TableGetHoveredColumn();
+
+    /**
+     * Retrieve *PREVIOUS FRAME* hovered row. This difference with TableGetHoveredColumn() is the reason why this is not public yet.
+     */
+    @BindingMethod
+    public static native int TableGetHoveredRow();
+
+    @BindingMethod
+    public static native float TableGetHeaderRowHeight();
+
+    @BindingMethod
+    public static native void TablePushBackgroundChannel();
+
+    @BindingMethod
+    public static native void TablePopBackgroundChannel();
+
+    // Widgets
+
+    @BindingMethod
+    public static native void TextEx(String beginText, @OptArg String endText, @OptArg @ArgValue(staticCast = "ImGuiTextFlags") int flags);
+
+    @BindingMethod
+    public static native boolean ButtonEx(String label, @OptArg(callValue = "ImVec2(0,0)") ImVec2 size, @OptArg @ArgValue(staticCast = "ImGuiButtonFlags") int flags);
+
+    @BindingMethod
+    public static native boolean ArrowButtonEx(String strId,
+                                               @ArgValue(staticCast = "ImGuiDir") int dir,
+                                               ImVec2 size,
+                                               @OptArg @ArgValue(staticCast = "ImGuiButtonFlags") int flags);
+
+    @BindingMethod
+    public static native boolean ImageButtonEx(@ArgValue(callPrefix = "(ImGuiID)") int id,
+                                               @ArgValue(callPrefix = "(ImTextureID)(uintptr_t)") long textureId,
+                                               ImVec2 size,
+                                               ImVec2 uv0,
+                                               ImVec2 uv1,
+                                               ImVec4 bgCol,
+                                               ImVec4 tintCol,
+                                               @ArgValue(staticCast = "ImGuiButtonFlags") int flags);
+
+    @BindingMethod
+    public static native void SeparatorEx(@ArgValue(staticCast = "ImGuiSeparatorFlags") int flags, @OptArg float thickness);
+
+    @BindingMethod
+    public static native void SeparatorTextEx(@ArgValue(callPrefix = "(ImGuiID)") int id, String label, String labelEnd, float extraWidth);
+
+    // Widgets: Window Decorations
+
+    @BindingMethod
+    public static native boolean CloseButton(@ArgValue(callPrefix = "(ImGuiID)") int id, ImVec2 pos);
+
+    @BindingMethod
+    public static native boolean CollapseButton(@ArgValue(callPrefix = "(ImGuiID)") int id, ImVec2 pos, ImGuiDockNode dockNode);
+
+    @BindingMethod
+    public static native void Scrollbar(@ArgValue(staticCast = "ImGuiAxis") int axis);
+
+    @BindingMethod
+    public static native ImRect GetWindowScrollbarRect(ImGuiWindow imGuiWindow, @ArgValue(staticCast = "ImGuiAxis") int axis);
+
+    @BindingMethod
+    public static native int GetWindowScrollbarID(ImGuiWindow window, @ArgValue(staticCast = "ImGuiAxis") int axis);
+
+    @BindingMethod
+    public static native int GetWindowResizeCornerID(ImGuiWindow window, int n);
+
+    @BindingMethod
+    public static native int GetWindowResizeBorderID(ImGuiWindow window, @ArgValue(staticCast = "ImGuiDir") int dir);
 
     // Widgets low-level behaviors
 
-    public static boolean splitterBehavior(float bbMinX, float bbMinY, float bbMaxX, float bbMaxY, int id, int imGuiAxis, ImFloat size1, ImFloat size2, float minSize1, float minSize2) {
-        return splitterBehavior(bbMinX, bbMinY, bbMaxX, bbMaxY, id, imGuiAxis, size1, size2, minSize1, minSize2, 0, 0, 0);
-    }
+    @BindingMethod
+    public static native boolean ButtonBehavior(ImRect bb, @ArgValue(callPrefix = "(ImGuiID)") int id, ImBoolean outHovered, ImBoolean outHeld, @OptArg @ArgValue(staticCast = "ImGuiButtonFlags") int imGuiButtonFlags);
 
-    public static boolean splitterBehavior(float bbMinX, float bbMinY, float bbMaxX, float bbMaxY, int id, int imGuiAxis, ImFloat size1, ImFloat size2, float minSize1, float minSize2, float hoverExtend) {
-        return splitterBehavior(bbMinX, bbMinY, bbMaxX, bbMaxY, id, imGuiAxis, size1, size2, minSize1, minSize2, hoverExtend, 0, 0);
-    }
+    @BindingMethod
+    public static native boolean SplitterBehavior(ImRect bb, int id, @ArgValue(staticCast = "ImGuiAxis") int axis, ImFloat size1, ImFloat size2, float minSize1, float minSize2, @OptArg float hoverExtend, @OptArg float hoverVisibilityDelay, @OptArg int bgCol);
 
-    public static boolean splitterBehavior(float bbMinX, float bbMinY, float bbMaxX, float bbMaxY, int id, int imGuiAxis, ImFloat size1, ImFloat size2, float minSize1, float minSize2, float hoverExtend, float hoverVisibilityDelay, int bgCol) {
-        return nSplitterBehaviour(bbMinX, bbMinY, bbMaxX, bbMaxY, id, imGuiAxis, size1.getData(), size2.getData(), minSize1, minSize2, hoverExtend, hoverVisibilityDelay, bgCol);
-    }
+    // Shade functions (write over already created vertices)
 
-    private static native boolean nSplitterBehaviour(float bbMinX, float bbMinY, float bbMaxX, float bbMaxY, int id, int imGuiAxis, float[] size1, float[] size2, float minSize1, float minSize2, float hoverExtend, float hoverVisibilityDelay, int bgCol); /*
-        return ImGui::SplitterBehavior(ImRect(bbMinX, bbMinY, bbMaxX, bbMaxY), id, (ImGuiAxis)imGuiAxis, &size1[0], &size2[0], minSize1, minSize2, hoverExtend, hoverVisibilityDelay, bgCol);
-    */
-
-    public static ImGuiWindow getCurrentWindow() {
-        IMGUI_CURRENT_WINDOW.ptr = nGetCurrentWindow();
-        return IMGUI_CURRENT_WINDOW;
-    }
-
-    private static native long nGetCurrentWindow(); /*
-        return (intptr_t)ImGui::GetCurrentWindow();
-    */
-
-    public static ImRect getWindowScrollbarRect(final ImGuiWindow imGuiWindow, int axis) {
-        final ImRect imRect = new ImRect();
-        nGetWindowScrollbarRect(imGuiWindow.ptr, axis, imRect.min, imRect.max);
-        return imRect;
-    }
-
-    private static native void nGetWindowScrollbarRect(long windowPtr, int axis, ImVec2 minDstImVec2, ImVec2 maxDstImVec2); /*
-        ImRect rect = ImGui::GetWindowScrollbarRect((ImGuiWindow*)windowPtr, static_cast<ImGuiAxis>(axis));
-        Jni::ImVec2Cpy(env, &rect.Min, minDstImVec2);
-        Jni::ImVec2Cpy(env, &rect.Max, maxDstImVec2);
-    */
+    @BindingMethod
+    public static native void ShadeVertsTransformPos(ImDrawList drawList, int vertStartIdx, int vertEndIdx, ImVec2 pivotIn, float cosA, float sinA, ImVec2 pivotOut);
 }

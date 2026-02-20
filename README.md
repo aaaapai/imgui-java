@@ -6,7 +6,7 @@
 
 [![Github All Releases](https://img.shields.io/github/downloads/SpaiR/imgui-java/total.svg?logo=github)](https://github.com/SpaiR/imgui-java/releases)
 [![CI](https://github.com/SpaiR/imgui-java/actions/workflows/ci.yml/badge.svg)](https://github.com/SpaiR/imgui-java/actions/workflows/ci.yml)<br>
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.spair/imgui-java-binding?logo=apache-maven)](https://search.maven.org/search?q=g:io.github.spair%20AND%20a:imgui-java-*)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.spair/imgui-java-binding?logo=apache-maven)](https://central.sonatype.com/search?q=io.github.spair++imgui-java)
 [![binding javadoc](https://javadoc.io/badge2/io.github.spair/imgui-java-binding/javadoc_binding.svg?logo=java)](https://javadoc.io/doc/io.github.spair/imgui-java-binding)
 [![app javadoc](https://javadoc.io/badge2/io.github.spair/imgui-java-app/javadoc_app.svg?logo=java)](https://javadoc.io/doc/io.github.spair/imgui-java-app)
 
@@ -337,7 +337,9 @@ By default, Dear ImGui uses stb-truetype to render fonts. However, there is an o
 To learn about the differences, visit the [imgui_freetype](https://github.com/ocornut/imgui/tree/256594575d95d56dda616c544c509740e74906b4/misc/freetype) page.
 
 This binding also supports the FreeType option. 
-FreeType is statically pre-compiled into the library, meaning it is **enabled by default** and there is no option to disable it. 
+FreeType is statically pre-compiled into the library, meaning it is **included by default**.
+To enable it use `ImFontAtlas#setFreeTypeRenderer(true)` method. This should be done before fonts atlas generation.
+https://github.com/SpaiR/imgui-java/blob/e822240115bb27ef0f399ccdf39613fb746f46be/example/src/main/java/Main.java#L46-L47
 Therefore, you can freely use `ImGuiFreeTypeBuilderFlags` in your font configuration.
 
 If you prefer not to use the FreeType font renderer, you will need to build your own binaries and use them instead.

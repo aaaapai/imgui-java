@@ -1,3 +1,4 @@
+/*
 import imgui.extension.imguifiledialog.ImGuiFileDialog;
 import imgui.extension.imguifiledialog.callback.ImGuiFileDialogPaneFun;
 import imgui.extension.imguifiledialog.flag.ImGuiFileDialogFlags;
@@ -16,7 +17,7 @@ public class ExampleImGuiFileDialog {
     private static long userData = 0;
     private static ImGuiFileDialogPaneFun callback = new ImGuiFileDialogPaneFun() {
         @Override
-        public void paneFun(String filter, long userDatas, boolean canContinue) {
+        public void accept(String filter, long userDatas, boolean canContinue) {
             ImGui.text("Filter: " + filter);
         }
     };
@@ -51,7 +52,7 @@ public class ExampleImGuiFileDialog {
             }
 
             if (ImGui.button("Browse Folder")) {
-                ImGuiFileDialog.openDialog("browse-folder-key", "Choose Folder", null, ".", "", 1, 7, ImGuiFileDialogFlags.None);
+                ImGuiFileDialog.openDialog("browse-folder-key", "Choose Folder", null, ".", "", callback, 1, 7L, ImGuiFileDialogFlags.None);
             }
 
             if (ImGuiFileDialog.display("browse-folder-key", ImGuiFileDialogFlags.None, 200, 400, 800, 600)) {
@@ -71,3 +72,4 @@ public class ExampleImGuiFileDialog {
         ImGui.end();
     }
 }
+*/

@@ -1,10 +1,13 @@
 package imgui;
 
 import imgui.assertion.ImAssertCallback;
+import imgui.binding.annotation.ArgValue;
+import imgui.binding.annotation.ArgVariant;
+import imgui.binding.annotation.BindingMethod;
+import imgui.binding.annotation.BindingSource;
+import imgui.binding.annotation.OptArg;
+import imgui.binding.annotation.ReturnValue;
 import imgui.callback.ImGuiInputTextCallback;
-import imgui.flag.ImGuiCond;
-import imgui.flag.ImGuiDragDropFlags;
-import imgui.flag.ImGuiInputTextFlags;
 import imgui.internal.ImGuiContext;
 import imgui.type.ImBoolean;
 import imgui.type.ImDouble;
@@ -26,26 +29,13 @@ import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 import java.util.Properties;
 
+@BindingSource
+@SuppressWarnings({"unused", "UnusedReturnValue"})
 public class ImGui {
     private static final String LIB_PATH_PROP = "imgui.library.path";
     private static final String LIB_NAME_PROP = "imgui.library.name";
     private static final String LIB_NAME_DEFAULT = "imgui-java64";
     private static final String LIB_TMP_DIR_PREFIX = "imgui-java-natives";
-
-    private static final ImGuiContext IMGUI_CONTEXT;
-    private static final ImGuiIO IMGUI_IO;
-    private static final ImDrawList WINDOW_DRAW_LIST;
-    private static final ImDrawList BACKGROUND_DRAW_LIST;
-    private static final ImDrawList FOREGROUND_DRAW_LIST;
-    private static final ImGuiStorage IMGUI_STORAGE;
-    private static final ImGuiViewport WINDOW_VIEWPORT;
-    private static final ImGuiViewport FIND_VIEWPORT;
-
-    private static final ImDrawData DRAW_DATA;
-    private static final ImFont FONT;
-    private static final ImGuiStyle STYLE;
-    private static final ImGuiViewport MAIN_VIEWPORT;
-    private static final ImGuiPlatformIO PLATFORM_IO;
 
     static {
         final String libPath = System.getProperty(LIB_PATH_PROP);
@@ -67,25 +57,11 @@ public class ImGui {
             }
         }
 
-        IMGUI_CONTEXT = new ImGuiContext(0);
-        IMGUI_IO = new ImGuiIO(0);
-        WINDOW_DRAW_LIST = new ImDrawList(0);
-        BACKGROUND_DRAW_LIST = new ImDrawList(0);
-        FOREGROUND_DRAW_LIST = new ImDrawList(0);
-        IMGUI_STORAGE = new ImGuiStorage(0);
-        WINDOW_VIEWPORT = new ImGuiViewport(0);
-        FIND_VIEWPORT = new ImGuiViewport(0);
-
-        DRAW_DATA = new ImDrawData(0);
-        FONT = new ImFont(0);
-        STYLE = new ImGuiStyle(0);
-        MAIN_VIEWPORT = new ImGuiViewport(0);
-        PLATFORM_IO = new ImGuiPlatformIO(0);
-
         nInitJni();
         ImFontAtlas.nInit();
         ImGuiPlatformIO.init();
         nInitInputTextData();
+
         setAssertCallback(new ImAssertCallback() {
             @Override
             public void imAssertCallback(String assertion, int line, String file) {
@@ -160,7 +136,7 @@ public class ImGui {
     /**
      * For internal usage.
      * Method is used to initiate static instantiation (loading of the native libraries etc.).
-     * Otherwise native libraries will be loaded on demand and natively mapped objects won't work.
+     * Otherwise, native libraries will be loaded on demand and natively mapped objects won't work.
      */
     public static void init() {
     }
@@ -177,724 +153,399 @@ public class ImGui {
         Jni::InitBindingStruct(env);
     */
 
-    // Context creation and access
-    // Each context create its own ImFontAtlas by default.
-    // You may instance one yourself and pass it to CreateContext() to share a font atlas between imgui contexts.
-    // None of those functions is reliant on the current context.
-    //
-    // BINDING NOTICE: Getting of the current context is not implemented since it's a part of internal API which is not exposed here.
-
-    public static ImGuiContext createContext() {
-        IMGUI_CONTEXT.ptr = nCreateContext();
-        return IMGUI_CONTEXT;
-    }
-
-    private static native long nCreateContext(); /*
-        return (intptr_t)ImGui::CreateContext();
-    */
-
-    public static ImGuiContext createContext(ImFontAtlas sharedFontAtlas) {
-        IMGUI_CONTEXT.ptr = nCreateContext(sharedFontAtlas.ptr);
-        return IMGUI_CONTEXT;
-    }
-
-    private static native long nCreateContext(long sharedFontAtlasPtr); /*
-        return (intptr_t)ImGui::CreateContext((ImFontAtlas*)sharedFontAtlasPtr);
-    */
-
-    public static native void destroyContext(); /*
-        ImGui::DestroyContext();
-    */
-
-    public static void destroyContext(ImGuiContext ctx) {
-        nDestroyContext(ctx.ptr);
-    }
-
-    private static native void nDestroyContext(long ptr); /*
-        ImGui::DestroyContext((ImGuiContext*) ptr);
-    */
-
-    public static ImGuiContext getCurrentContext() {
-        IMGUI_CONTEXT.ptr = nGetCurrentContext();
-        return IMGUI_CONTEXT;
-    }
-
-    private static native long nGetCurrentContext(); /*
-        return (intptr_t)ImGui::GetCurrentContext();
-    */
-
-    public static void setCurrentContext(ImGuiContext ctx) {
-        nSetCurrentContext(ctx.ptr);
-    }
-
-    private static native void nSetCurrentContext(long ptr); /*
-        ImGui::SetCurrentContext((ImGuiContext*) ptr);
-    */
-
     /**
      * Set a custom assertion callback for ImGui assertions.
      * Take note: Any custom assertion callback SHOULD NOT throw any exception.
      * After any callback the application will be terminated, any attempt to bypass this behavior
      * will result in a EXCEPTION_ACCESS_VIOLATION from within the native layer.
+     *
      * @param callback The custom ImGui assertion callback
      */
     public static native void setAssertCallback(ImAssertCallback callback); /*
         Jni::SetAssertionCallback(callback);
     */
 
+    // Context creation and access
+    // Each context create its own ImFontAtlas by default.
+    // You may instance one yourself and pass it to CreateContext() to share a font atlas between imgui contexts.
+    // None of those functions is reliant on the current context.
+
+    @BindingMethod
+    public static native ImGuiContext CreateContext(@OptArg ImFontAtlas sharedFontAtlas);
+
+    @BindingMethod
+    public static native void DestroyContext(@OptArg ImGuiContext ctx);
+
+    @BindingMethod
+    public static native ImGuiContext GetCurrentContext();
+
+    @BindingMethod
+    public static native void SetCurrentContext(ImGuiContext ctx);
+
     // Main
 
     /**
      * Access the IO structure (mouse/keyboard/gamepad inputs, time, various configuration options/flags).
      */
-    public static ImGuiIO getIO() {
-        IMGUI_IO.ptr = nGetIO();
-        return IMGUI_IO;
-    }
-
-    private static native long nGetIO(); /*
-        return (intptr_t)&ImGui::GetIO();
-    */
+    @BindingMethod
+    @ReturnValue(isStatic = true, callPrefix = "&")
+    public static native ImGuiIO GetIO();
 
     /**
-     * Access the Style structure (colors, sizes). Always use PushStyleCol(), PushStyleVar() to modify style mid-frame!
+     * Access the Style structure (colors, sizes). Always use PushStyleColor(), PushStyleVar() to modify style mid-frame!
      */
-    public static ImGuiStyle getStyle() {
-        STYLE.ptr = nGetStyle();
-        return STYLE;
-    }
-
-    private static native long nGetStyle(); /*
-        return (intptr_t)&ImGui::GetStyle();
-    */
+    @BindingMethod
+    @ReturnValue(isStatic = true, callPrefix = "&")
+    public static native ImGuiStyle GetStyle();
 
     /**
      * Start a new Dear ImGui frame, you can submit any command from this point until Render()/EndFrame().
      */
-    public static native void newFrame(); /*
-        ImGui::NewFrame();
-    */
+    @BindingMethod
+    public static native void NewFrame();
 
     /**
      * Ends the Dear ImGui frame. automatically called by Render(). If you don't need to render data (skipping rendering) you may call EndFrame() without
      * Render()... but you'll have wasted CPU already! If you don't need to render, better to not create any windows and not call NewFrame() at all!
      */
-    public static native void endFrame(); /*
-        ImGui::EndFrame();
-    */
+    @BindingMethod
+    public static native void EndFrame();
 
     /**
      * Ends the Dear ImGui frame, finalize the draw data. You can then get call GetDrawData().
      */
-    public static native void render(); /*
-        ImGui::Render();
-    */
+    @BindingMethod
+    public static native void Render();
 
     /**
      * Valid after Render() and until the next call to NewFrame(). this is what you have to render.
      */
-    public static ImDrawData getDrawData() {
-        DRAW_DATA.ptr = nGetDrawData();
-        return DRAW_DATA;
-    }
-
-    private static native long nGetDrawData(); /*
-        return (intptr_t)ImGui::GetDrawData();
-    */
+    @BindingMethod
+    @ReturnValue(isStatic = true)
+    public static native ImDrawData GetDrawData();
 
     // Demo, Debug, Information
 
     /**
      * Create Demo window. Demonstrate most ImGui features. Call this to learn about the library!
      */
-    public static native void showDemoWindow(); /*
-        ImGui::ShowDemoWindow();
-    */
-
-    public static void showDemoWindow(ImBoolean pOpen) {
-        nShowDemoWindow(pOpen.getData());
-    }
-
-    private static native void nShowDemoWindow(boolean[] pOpen); /*
-        ImGui::ShowDemoWindow(&pOpen[0]);
-    */
+    @BindingMethod
+    public static native void ShowDemoWindow(@OptArg ImBoolean pOpen);
 
     /**
      * Create Metrics/Debugger window. display Dear ImGui internals: windows, draw commands, various internal state, etc.
      */
-    public static void showMetricsWindow(ImBoolean pOpen) {
-        nShowMetricsWindow(pOpen.getData());
-    }
+    @BindingMethod
+    public static native void ShowMetricsWindow(@OptArg ImBoolean pOpen);
 
     /**
-     * Create Metrics/Debugger window. display Dear ImGui internals: windows, draw commands, various internal state, etc.
+     * Create Debug Log window. display a simplified log of important dear imgui events.
      */
-    public static native void showMetricsWindow(); /*
-        ImGui::ShowMetricsWindow();
-    */
-
-    private static native void nShowMetricsWindow(boolean[] pOpen); /*
-        ImGui::ShowMetricsWindow(&pOpen[0]);
-    */
+    @BindingMethod
+    public static native void ShowDebugLogWindow(@OptArg ImBoolean pOpen);
 
     /**
      * Create Stack Tool window. hover items with mouse to query information about the source of their unique ID.
      */
-    public static void showStackToolWindow(ImBoolean pOpen) {
-        nShowMetricsWindow(pOpen.getData());
-    }
-
-    /**
-     * Create Stack Tool window. hover items with mouse to query information about the source of their unique ID.
-     */
-    public static native void showStackToolWindow(); /*
-        ImGui::ShowStackToolWindow();
-    */
-
-    private static native void nShowStackToolWindow(boolean[] pOpen); /*
-        ImGui::ShowStackToolWindow(&pOpen[0]);
-    */
+    @BindingMethod
+    public static native void ShowIDStackToolWindow(@OptArg ImBoolean pOpen);
 
     /**
      * Create About window. display Dear ImGui version, credits and build/system information.
      */
-    public static native void showAboutWindow(); /*
-        ImGui::ShowAboutWindow();
-    */
-
-    public static void showAboutWindow(ImBoolean pOpen) {
-        nShowAboutWindow(pOpen.getData());
-    }
-
-    private static native void nShowAboutWindow(boolean[] pOpen); /*
-        ImGui::ShowAboutWindow(&pOpen[0]);
-    */
+    @BindingMethod
+    public static native void ShowAboutWindow(@OptArg ImBoolean pOpen);
 
     /**
      * Add style editor block (not a window).
      * You can pass in a reference ImGuiStyle structure to compare to, revert to and save to (else it uses the default style)
      */
-    public static native void showStyleEditor(); /*
-        ImGui::ShowStyleEditor();
-    */
-
-    public static void showStyleEditor(ImGuiStyle ref) {
-        nShowStyleEditor(ref.ptr);
-    }
-
-    private static native void nShowStyleEditor(long ref); /*
-        ImGui::ShowStyleEditor((ImGuiStyle*)ref);
-    */
+    @BindingMethod
+    public static native void ShowStyleEditor(@OptArg ImGuiStyle ref);
 
     /**
      * Add style selector block (not a window), essentially a combo listing the default styles.
      */
-    public static native boolean showStyleSelector(String label); /*
-        return ImGui::ShowStyleSelector(label);
-    */
+    @BindingMethod
+    public static native boolean ShowStyleSelector(String label);
 
     /**
      * Add font selector block (not a window), essentially a combo listing the loaded fonts.
      */
-    public static native void showFontSelector(String label); /*
-        ImGui::ShowFontSelector(label);
-    */
+    @BindingMethod
+    public static native void ShowFontSelector(String label);
 
     /**
-     * Add basic help/info block (not a window): how to manipulate ImGui as a end-user (mouse/keyboard controls).
+     * Add basic help/info block (not a window): how to manipulate ImGui as an end-user (mouse/keyboard controls).
      */
-    public static native void showUserGuide(); /*
-        ImGui::ShowUserGuide();
-    */
+    @BindingMethod
+    public static native void ShowUserGuide();
 
     /**
      * Get the compiled version string e.g. "1.80 WIP" (essentially the value for IMGUI_VERSION from the compiled version of imgui.cpp)
      */
-    public static native String getVersion(); /*
-        return env->NewStringUTF(ImGui::GetVersion());
-    */
+    @BindingMethod
+    public static native String GetVersion();
 
     // Styles
 
     /**
      * New, recommended style (default)
      */
-    public static native void styleColorsDark(); /*
-        ImGui::StyleColorsDark();
-    */
-
-    public static void styleColorsDark(ImGuiStyle style) {
-        nStyleColorsDark(style.ptr);
-    }
-
-    private static native void nStyleColorsDark(long ptr); /*
-        ImGui::StyleColorsDark((ImGuiStyle*)ptr);
-    */
+    @BindingMethod
+    public static native void StyleColorsDark(@OptArg ImGuiStyle style);
 
     /**
      * Best used with borders and a custom, thicker font
      */
-    public static native void styleColorsLight(); /*
-        ImGui::StyleColorsLight();
-    */
-
-    public static void styleColorsLight(ImGuiStyle style) {
-        nStyleColorsLight(style.ptr);
-    }
-
-    private static native void nStyleColorsLight(long ptr); /*
-        ImGui::StyleColorsLight((ImGuiStyle*)ptr);
-    */
+    @BindingMethod
+    public static native void StyleColorsLight(@OptArg ImGuiStyle style);
 
     /**
      * Classic imgui style
      */
-    public static native void styleColorsClassic(); /*
-        ImGui::StyleColorsClassic();
-    */
-
-    public static void styleColorsClassic(ImGuiStyle style) {
-        nStyleColorsClassic(style.ptr);
-    }
-
-    private static native void nStyleColorsClassic(long ptr); /*
-        ImGui::StyleColorsClassic((ImGuiStyle*)ptr);
-    */
+    @BindingMethod
+    public static native void StyleColorsClassic(@OptArg ImGuiStyle style);
 
     // Windows
     // - Begin() = push window to the stack and start appending to it. End() = pop window from the stack.
-    // - You may append multiple times to the same window during the same frame.
-    // - Passing 'bool* pOpen != NULL' shows a window-closing widget in the upper-right corner of the window,
+    // - Passing 'bool* p_open != NULL' shows a window-closing widget in the upper-right corner of the window,
     //   which clicking will set the boolean to false when clicked.
     // - You may append multiple times to the same window during the same frame by calling Begin()/End() pairs multiple times.
     //   Some information such as 'flags' or 'p_open' will only be considered by the first call to Begin().
     // - Begin() return false to indicate the window is collapsed or fully clipped, so you may early out and omit submitting
     //   anything to the window. Always call a matching End() for each Begin() call, regardless of its return value!
-    //   [Important: due to legacy reason, this is inconsistent with most other functions such as BeginMenu/EndMenu,
-    //    BeginPopup/EndPopup, etc. where the EndXXX call should only be called if the corresponding BeginXXX function
-    //    returned true. Begin and BeginChild are the only odd ones out. Will be fixed in a future update.]
+    //   [Important: due to legacy reason, Begin/End and BeginChild/EndChild are inconsistent with all other functions
+    //    such as BeginMenu/EndMenu, BeginPopup/EndPopup, etc. where the EndXXX call should only be called if the corresponding
+    //    BeginXXX function returned true. Begin and BeginChild are the only odd ones out. Will be fixed in a future update.]
     // - Note that the bottom of window stack always contains a window called "Debug".
 
-    public static native boolean begin(String title); /*
-        return ImGui::Begin(title);
-    */
+    @BindingMethod
+    public static native boolean Begin(String title, @OptArg(callValue = "NULL") ImBoolean pOpen, @OptArg int imGuiWindowFlags);
 
-    public static boolean begin(String title, ImBoolean pOpen) {
-        return nBegin(title, pOpen.getData(), 0);
-    }
-
-    public static boolean begin(String title, int imGuiWindowFlags) {
-        return nBegin(title, imGuiWindowFlags);
-    }
-
-    public static boolean begin(String title, ImBoolean pOpen, int imGuiWindowFlags) {
-        return nBegin(title, pOpen.getData(), imGuiWindowFlags);
-    }
-
-    private static native boolean nBegin(String title, int imGuiWindowFlags); /*
-        return ImGui::Begin(title, NULL, imGuiWindowFlags);
-    */
-
-    private static native boolean nBegin(String title, boolean[] pOpen, int imGuiWindowFlags); /*
-        return ImGui::Begin(title, &pOpen[0], imGuiWindowFlags);
-    */
-
-    public static native void end(); /*
-        ImGui::End();
-    */
+    @BindingMethod
+    public static native void End();
 
     // Child Windows
     // - Use child windows to begin into a self-contained independent scrolling/clipping regions within a host window. Child windows can embed their own child.
-    // - For each independent axis of 'size': ==0.0f: use remaining host window size / >0.0f: fixed size / <0.0f: use remaining window size minus abs(size) / Each axis can use a different mode, e.g. ImVec2(0,400).
-    // - BeginChild() returns false to indicate the window is collapsed or fully clipped, so you may early out and omit submitting anything to the window.
-    //   Always call a matching EndChild() for each BeginChild() call, regardless of its return value.
-    //   [Important: due to legacy reason, this is inconsistent with most other functions such as BeginMenu/EndMenu,
-    //    BeginPopup/EndPopup, etc. where the EndXXX call should only be called if the corresponding BeginXXX function
-    //    returned true. Begin and BeginChild are the only odd ones out. Will be fixed in a future update.]
+    // - Before 1.90 (November 2023), the "ImGuiChildFlags child_flags = 0" parameter was "bool border = false".
+    //   This API is backward compatible with old code, as we guarantee that ImGuiChildFlags_Border == true.
+    //   Consider updating your old code:
+    //      BeginChild("Name", size, false)   -> Begin("Name", size, 0); or Begin("Name", size, ImGuiChildFlags_None);
+    //      BeginChild("Name", size, true)    -> Begin("Name", size, ImGuiChildFlags_Border);
+    // - Manual sizing (each axis can use a different setting e.g. ImVec2(0.0f, 400.0f)):
+    //     == 0.0f: use remaining parent window size for this axis.
+    //      > 0.0f: use specified size for this axis.
+    //      < 0.0f: right/bottom-align to specified distance from available content boundaries.
+    // - Specifying ImGuiChildFlags_AutoResizeX or ImGuiChildFlags_AutoResizeY makes the sizing automatic based on child contents.
+    //   Combining both ImGuiChildFlags_AutoResizeX _and_ ImGuiChildFlags_AutoResizeY defeats purpose of a scrolling region and is NOT recommended.
+    // - BeginChild() returns false to indicate the window is collapsed or fully clipped, so you may early out and omit submitting
+    //   anything to the window. Always call a matching EndChild() for each BeginChild() call, regardless of its return value.
+    //   [Important: due to legacy reason, Begin/End and BeginChild/EndChild are inconsistent with all other functions
+    //    such as BeginMenu/EndMenu, BeginPopup/EndPopup, etc. where the EndXXX call should only be called if the corresponding
+    //    BeginXXX function returned true. Begin and BeginChild are the only odd ones out. Will be fixed in a future update.]
 
-    public static native boolean beginChild(String strId); /*
-        return ImGui::BeginChild(strId);
-    */
+    @BindingMethod
+    public static native boolean BeginChild(String strId, @OptArg(callValue = "ImVec2(0,0)") ImVec2 size, @OptArg(callValue = "0") int childFlags, @OptArg int windowFlags);
 
-    public static native boolean beginChild(String strId, float width, float height); /*
-        return ImGui::BeginChild(strId, ImVec2(width, height));
-    */
+    @BindingMethod
+    public static native boolean BeginChild(int id, @OptArg(callValue = "ImVec2(0,0)") ImVec2 size, @OptArg(callValue = "0") int childFlags, @OptArg int windowFlags);
 
-    public static native boolean beginChild(String strId, float width, float height, boolean border); /*
-        return ImGui::BeginChild(strId, ImVec2(width, height), border);
-    */
+    @BindingMethod
+    public static native boolean BeginChild(String strId, ImVec2 size, @ArgValue(staticCast = "ImGuiChildFlags") boolean border, @OptArg int windowFlags);
 
-    public static native boolean beginChild(String strId, float width, float height, boolean border, int imGuiWindowFlags); /*
-        return ImGui::BeginChild(strId, ImVec2(width, height), border, imGuiWindowFlags);
-    */
+    /**
+     * @deprecated Use {@link #beginChild(String, ImVec2, int, int)} instead.
+     */
+    @Deprecated
+    @BindingMethod
+    public static native boolean BeginChild(int id, ImVec2 size, @ArgValue(staticCast = "ImGuiChildFlags") boolean border, @OptArg int windowFlags);
 
-    public static native boolean beginChild(int imGuiID); /*
-        return ImGui::BeginChild(imGuiID);
-    */
-
-    public static native boolean beginChild(int imGuiID, float width, float height, boolean border); /*
-        return ImGui::BeginChild(imGuiID, ImVec2(width, height), border);
-    */
-
-    public static native boolean beginChild(int imGuiID, float width, float height, boolean border, int imGuiWindowFlags); /*
-        return ImGui::BeginChild(imGuiID, ImVec2(width, height), border, imGuiWindowFlags);
-    */
-
-    public static native void endChild(); /*
-        ImGui::EndChild();
-    */
+    @BindingMethod
+    public static native void EndChild();
 
     // Windows Utilities
     // - "current window" = the window we are appending into while inside a Begin()/End() block. "next window" = next window we will Begin() into.
 
-    public static native boolean isWindowAppearing(); /*
-        return ImGui::IsWindowAppearing();
-    */
+    @BindingMethod
+    public static native boolean IsWindowAppearing();
 
-    public static native boolean isWindowCollapsed(); /*
-        return ImGui::IsWindowCollapsed();
-    */
+    @BindingMethod
+    public static native boolean IsWindowCollapsed();
 
     /**
      * Is current window focused? or its root/child, depending on flags. see flags for options.
      */
-    public static native boolean isWindowFocused(); /*
-        return ImGui::IsWindowFocused();
-    */
+    @BindingMethod
+    public static native boolean IsWindowFocused(@OptArg int imGuiFocusedFlags);
 
     /**
-     * Is current window focused? or its root/child, depending on flags. see flags for options.
+     * Is current window hovered and hoverable (e.g. not blocked by a popup/modal)? See ImGuiHoveredFlags_ for options.
+     * IMPORTANT: If you are trying to check whether your mouse should be dispatched to Dear ImGui or to your underlying app,
+     * you should not use this function! Use the 'io.WantCaptureMouse' boolean for that!
+     * Refer to FAQ entry "How can I tell whether to dispatch mouse/keyboard to Dear ImGui or my application?" for details.
      */
-    public static native boolean isWindowFocused(int imGuiFocusedFlags); /*
-        return ImGui::IsWindowFocused(imGuiFocusedFlags);
-    */
-
-    /**
-     * Is current window hovered (and typically: not blocked by a popup/modal)? see flags for options.
-     * NB: If you are trying to check whether your mouse should be dispatched to imgui or to your app,
-     * you should use the 'io.WantCaptureMouse' boolean for that! Please read the FAQ!
-     */
-    public static native boolean isWindowHovered(); /*
-        return ImGui::IsWindowHovered();
-    */
-
-    /**
-     * Is current window hovered (and typically: not blocked by a popup/modal)? see flags for options.
-     * NB: If you are trying to check whether your mouse should be dispatched to imgui or to your app,
-     * you should use the 'io.WantCaptureMouse' boolean for that! Please read the FAQ!
-     */
-    public static native boolean isWindowHovered(int imGuiHoveredFlags); /*
-        return ImGui::IsWindowHovered(imGuiHoveredFlags);
-    */
+    @BindingMethod
+    public static native boolean IsWindowHovered(@OptArg int imGuiHoveredFlags);
 
     /**
      * Get draw list associated to the current window, to append your own drawing primitives
      */
-    public static ImDrawList getWindowDrawList() {
-        WINDOW_DRAW_LIST.ptr = nGetWindowDrawList();
-        return WINDOW_DRAW_LIST;
-    }
-
-    private static native long nGetWindowDrawList(); /*
-        return (intptr_t)ImGui::GetWindowDrawList();
-    */
+    @BindingMethod
+    public static native ImDrawList GetWindowDrawList();
 
     /**
      * Get DPI scale currently associated to the current window's viewport.
      */
-    public static native float getWindowDpiScale(); /*
-        return ImGui::GetWindowDpiScale();
-    */
+    @BindingMethod
+    public static native float GetWindowDpiScale();
 
     /**
-     * Get current window position in screen space (useful if you want to do your own drawing via the DrawList API)
+     * Get current window position in screen space (note: it is unlikely you need to use this.
+     * Consider using current layout pos instead, GetCursorScreenPos())
      */
-    public static ImVec2 getWindowPos() {
-        final ImVec2 value = new ImVec2();
-        getWindowPos(value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec2 GetWindowPos();
 
     /**
-     * Get current window position in screen space (useful if you want to do your own drawing via the DrawList API)
+     * Get current window size (note: it is unlikely you need to use this. Consider using GetCursorScreenPos() and e.g. GetContentRegionAvail() instead)
      */
-    public static native void getWindowPos(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetWindowPos(), dstImVec2);
-    */
-
-    /**
-     * Get current window position in screen space (useful if you want to do your own drawing via the DrawList API)
-     */
-    public static native float getWindowPosX(); /*
-        return ImGui::GetWindowPos().x;
-    */
-
-    /**
-     * Get current window position in screen space (useful if you want to do your own drawing via the DrawList API)
-     */
-    public static native float getWindowPosY(); /*
-        return ImGui::GetWindowPos().y;
-    */
-
-    /**
-     * Get current window size
-     */
-    public static ImVec2 getWindowSize() {
-        final ImVec2 value = new ImVec2();
-        getWindowSize(value);
-        return value;
-    }
-
-    /**
-     * Get current window size
-     */
-    public static native void getWindowSize(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetWindowSize(), dstImVec2);
-    */
-
-    /**
-     * Get current window size
-     */
-    public static native float getWindowSizeX(); /*
-        return ImGui::GetWindowSize().x;
-    */
-
-    /**
-     * Get current window size
-     */
-    public static native float getWindowSizeY(); /*
-        return ImGui::GetWindowSize().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetWindowSize();
 
     /**
      * Get current window width (shortcut for GetWindowSize().x)
      */
-    public static native float getWindowWidth(); /*
-        return ImGui::GetWindowWidth();
-    */
+    @BindingMethod
+    public static native float GetWindowWidth();
 
     /**
      * Get current window height (shortcut for GetWindowSize().y)
      */
-    public static native float getWindowHeight(); /*
-        return ImGui::GetWindowHeight();
-     */
+    @BindingMethod
+    public static native float GetWindowHeight();
 
     /**
      * Get viewport currently associated to the current window.
      */
-    public static ImGuiViewport getWindowViewport() {
-        WINDOW_VIEWPORT.ptr = nGetWindowViewport();
-        return WINDOW_VIEWPORT;
-    }
-
-    private static native long nGetWindowViewport(); /*
-        return (intptr_t)ImGui::GetWindowViewport();
-    */
+    @BindingMethod
+    public static native ImGuiViewport GetWindowViewport();
 
     // Prefer using SetNextXXX functions (before Begin) rather that SetXXX functions (after Begin).
 
     /**
      * Set next window position. call before Begin(). use pivot=(0.5f,0.5f) to center on given point, etc.
      */
-    public static native void setNextWindowPos(float x, float y); /*
-        ImGui::SetNextWindowPos(ImVec2(x, y));
-     */
-
-    /**
-     * Set next window position. call before Begin(). use pivot=(0.5f,0.5f) to center on given point, etc.
-     */
-    public static native void setNextWindowPos(float x, float y, int imGuiCond); /*
-        ImGui::SetNextWindowPos(ImVec2(x, y), imGuiCond);
-     */
-
-    /**
-     * Set next window position. call before Begin(). use pivot=(0.5f,0.5f) to center on given point, etc.
-     */
-    public static native void setNextWindowPos(float x, float y, int imGuiCond, float pivotX, float pivotY); /*
-        ImGui::SetNextWindowPos(ImVec2(x, y), imGuiCond, ImVec2(pivotX, pivotY));
-     */
+    @BindingMethod
+    public static native void SetNextWindowPos(ImVec2 pos, @OptArg(callValue = "ImGuiCond_None") int cond, @OptArg ImVec2 pivot);
 
     /**
      * Set next window size. set axis to 0.0f to force an auto-fit on this axis. call before Begin()
      */
-    public static native void setNextWindowSize(float width, float height); /*
-        ImGui::SetNextWindowSize(ImVec2(width, height));
-    */
+    @BindingMethod
+    public static native void SetNextWindowSize(ImVec2 size, @OptArg int cond);
 
     /**
-     * Set next window size. set axis to 0.0f to force an auto-fit on this axis. call before Begin()
+     * Set next window size limits. use 0.0f or FLT_MAX if you don't want limits. Use -1 for both min and max of same axis to preserve current size (which itself is a constraint).
+     * Use callback to apply non-trivial programmatic constraints.
      */
-    public static native void setNextWindowSize(float width, float height, int imGuiCond); /*
-        ImGui::SetNextWindowSize(ImVec2(width, height), imGuiCond);
-    */
-
-    /**
-     * Set next window size limits. use -1,-1 on either X/Y axis to preserve the current size. Sizes will be rounded down.
-     */
-    public static native void setNextWindowSizeConstraints(float minWidth, float minHeight, float maxWidth, float maxHeight); /*
-        ImGui::SetNextWindowSizeConstraints(ImVec2(minWidth, minHeight), ImVec2(maxWidth, maxHeight));
-    */
+    @BindingMethod
+    public static native void SetNextWindowSizeConstraints(ImVec2 sizeMin, ImVec2 sizeMax);
 
     /**
      * Set next window content size (~ scrollable client area, which enforce the range of scrollbars).
      * Not including window decorations (title bar, menu bar, etc.) nor WindowPadding. set an axis to 0.0f to leave it automatic. call before Begin()
      */
-    public static native void setNextWindowContentSize(float width, float height); /*
-        ImGui::SetNextWindowContentSize(ImVec2(width, height));
-    */
+    @BindingMethod
+    public static native void SetNextWindowContentSize(ImVec2 size);
 
     /**
      * Set next window collapsed state. call before Begin()
      */
-    public static native void setNextWindowCollapsed(boolean collapsed); /*
-        ImGui::SetNextWindowCollapsed(collapsed);
-    */
-
-    /**
-     * Set next window collapsed state. call before Begin()
-     */
-    public static native void setNextWindowCollapsed(boolean collapsed, int imGuiCond); /*
-        ImGui::SetNextWindowCollapsed(collapsed, imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetNextWindowCollapsed(boolean collapsed, @OptArg int cond);
 
     /**
      * Set next window to be focused / top-most. call before Begin()
      */
-    public static native void setNextWindowFocus(); /*
-        ImGui::SetNextWindowFocus();
-    */
+    @BindingMethod
+    public static native void SetNextWindowFocus();
+
+    /**
+     * Set next window scrolling value (use {@code < 0.0f} to not affect a given axis).
+     */
+    @BindingMethod
+    public static native void SetNextWindowScroll(ImVec2 scroll);
 
     /**
      * Set next window background color alpha. helper to easily override the Alpha component of ImGuiCol_WindowBg/ChildBg/PopupBg.
      * You may also use ImGuiWindowFlags_NoBackground.
      */
-    public static native void setNextWindowBgAlpha(float alpha); /*
-        ImGui::SetNextWindowBgAlpha(alpha);
-    */
+    @BindingMethod
+    public static native void SetNextWindowBgAlpha(float alpha);
 
     /**
      * Set next window viewport.
      */
-    public static native void setNextWindowViewport(int viewportId); /*
-        ImGui::SetNextWindowViewport(viewportId);
-    */
+    @BindingMethod
+    public static native void SetNextWindowViewport(int viewportId);
 
     /**
      * (not recommended) set current window position - call within Begin()/End().
      * Prefer using SetNextWindowPos(), as this may incur tearing and side-effects.
      */
-    public static native void setWindowPos(float x, float y); /*
-        ImGui::SetWindowPos(ImVec2(x, y));
-    */
-
-    /**
-     * (not recommended) set current window position - call within Begin()/End().
-     * Prefer using SetNextWindowPos(), as this may incur tearing and side-effects.
-     */
-    public static native void setWindowPos(float x, float y, int imGuiCond); /*
-        ImGui::SetWindowPos(ImVec2(x, y), imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowPos(ImVec2 pos, @OptArg int cond);
 
     /**
      * (not recommended) set current window size - call within Begin()/End(). set to ImVec2(0,0) to force an auto-fit.
      * Prefer using SetNextWindowSize(), as this may incur tearing and minor side-effects.
      */
-    public static native void setWindowSize(float width, float height); /*
-        ImGui::SetWindowSize(ImVec2(width, height));
-    */
-
-    /**
-     * (not recommended) set current window size - call within Begin()/End(). set to ImVec2(0,0) to force an auto-fit.
-     * Prefer using SetNextWindowSize(), as this may incur tearing and minor side-effects.
-     */
-    public static native void setWindowSize(float width, float height, int imGuiCond); /*
-        ImGui::SetWindowSize(ImVec2(width, height), imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowSize(ImVec2 size, @OptArg int cond);
 
     /**
      * (not recommended) set current window collapsed state. prefer using SetNextWindowCollapsed().
      */
-    public static native void setWindowCollapsed(boolean collapsed); /*
-        ImGui::SetWindowCollapsed(collapsed);
-    */
-
-    /**
-     * (not recommended) set current window collapsed state. prefer using SetNextWindowCollapsed().
-     */
-    public static native void setWindowCollapsed(boolean collapsed, int imGuiCond); /*
-        ImGui::SetWindowCollapsed(collapsed, imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowCollapsed(boolean collapsed, @OptArg int cond);
 
     /**
      * (not recommended) set current window to be focused / top-most. prefer using SetNextWindowFocus().
      */
-    public static native void setWindowFocus(); /*
-        ImGui::SetWindowFocus();
-    */
+    @BindingMethod
+    public static native void SetWindowFocus();
 
     /**
      * Set font scale. Adjust IO.FontGlobalScale if you want to scale all windows.
      * This is an old API! For correct scaling, prefer to reload font + rebuild ImFontAtlas + call style.ScaleAllSizes().
      */
-    public native void setWindowFontScale(float scale); /*
-        ImGui::SetWindowFontScale(scale);
-    */
+    @BindingMethod
+    public static native void SetWindowFontScale(float scale);
 
     /**
      * Set named window position.
      */
-    public static native void setWindowPos(String name, float x, float y); /*
-        ImGui::SetWindowPos(name, ImVec2(x, y));
-    */
-
-    /**
-     * Set named window position.
-     */
-    public static native void setWindowPos(String name, float x, float y, int imGuiCond); /*
-        ImGui::SetWindowPos(name, ImVec2(x, y), imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowPos(String name, ImVec2 pos, @OptArg int cond);
 
     /**
      * Set named window size. set axis to 0.0f to force an auto-fit on this axis.
      */
-    public static native void setWindowSize(String name, float x, float y); /*
-        ImGui::SetWindowSize(name, ImVec2(x, y));
-    */
-
-    /**
-     * Set named window size. set axis to 0.0f to force an auto-fit on this axis.
-     */
-    public static native void setWindowSize(String name, float x, float y, int imGuiCond); /*
-        ImGui::SetWindowSize(name, ImVec2(x, y), imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowSize(String name, ImVec2 size, @OptArg int cond);
 
     /**
      * Set named window collapsed state
      */
-    public static native void setWindowCollapsed(String name, boolean collapsed); /*
-        ImGui::SetWindowCollapsed(name, collapsed, 0);
-    */
-
-    /**
-     * Set named window collapsed state
-     */
-    public static native void setWindowCollapsed(String name, boolean collapsed, int imGuiCond); /*
-        ImGui::SetWindowCollapsed(name, collapsed, imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetWindowCollapsed(@ArgValue(callPrefix = "(const char *)") String name, @ArgValue(callPrefix = "(bool)") boolean collapsed, @OptArg int cond);
 
     /**
      * Set named window to be focused / top-most. Use NULL to remove focus.
      */
-    public static native void setWindowFocus(String name); /*MANUAL
-        if (obj_name == NULL)
-            ImGui::SetWindowFocus(NULL);
-        else {
-            char* name = (char*)env->GetStringUTFChars(obj_name, JNI_FALSE);
-            ImGui::SetWindowFocus(name);
-            env->ReleaseStringUTFChars(obj_name, name);
-        }
-    */
+    @BindingMethod
+    public static native void SetWindowFocus(String name);
 
     // Content region
     // - Retrieve available space from a given point. GetContentRegionAvail() is frequently useful.
@@ -903,235 +554,100 @@ public class ImGui {
     /**
      * == GetContentRegionMax() - GetCursorPos()
      */
-    public static ImVec2 getContentRegionAvail() {
-        final ImVec2 value = new ImVec2();
-        getContentRegionAvail(value);
-        return value;
-    }
-
-    /**
-     * == GetContentRegionMax() - GetCursorPos()
-     */
-    public static native void getContentRegionAvail(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetContentRegionAvail(), dstImVec2);
-    */
-
-    /**
-     * == GetContentRegionMax() - GetCursorPos()
-     */
-    public static native float getContentRegionAvailX(); /*
-        return ImGui::GetContentRegionAvail().x;
-    */
-
-    /**
-     * == GetContentRegionMax() - GetCursorPos()
-     */
-    public static native float getContentRegionAvailY(); /*
-        return ImGui::GetContentRegionAvail().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetContentRegionAvail();
 
     /**
      * Current content boundaries (typically window boundaries including scrolling, or current column boundaries), in windows coordinates
      */
-    public static ImVec2 getContentRegionMax() {
-        final ImVec2 value = new ImVec2();
-        getContentRegionMax(value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec2 GetContentRegionMax();
 
     /**
-     * Current content boundaries (typically window boundaries including scrolling, or current column boundaries), in windows coordinates
+     * Content boundaries min for the full window (roughly (0,0)-Scroll), in window coordinates
      */
-    public static native void getContentRegionMax(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetContentRegionMax(), dstImVec2);
-    */
+    @BindingMethod
+    public static native ImVec2 GetWindowContentRegionMin();
 
     /**
-     * Current content boundaries (typically window boundaries including scrolling, or current column boundaries), in windows coordinates
+     * Content boundaries max for the full window (roughly (0,0)+Size-Scroll) where Size can be overridden with SetNextWindowContentSize(), in window coordinates
      */
-    public static native float getContentRegionMaxX(); /*
-        return ImGui::GetContentRegionMax().x;
-    */
-
-    /**
-     * Current content boundaries (typically window boundaries including scrolling, or current column boundaries), in windows coordinates
-     */
-    public static native float getContentRegionMaxY(); /*
-        return ImGui::GetContentRegionMax().y;
-    */
-
-    /**
-     * Content boundaries max (roughly (0,0)+Size-Scroll) where Size can be override with SetNextWindowContentSize(), in window coordinates
-     */
-    public static ImVec2 getWindowContentRegionMin() {
-        final ImVec2 value = new ImVec2();
-        getWindowContentRegionMin(value);
-        return value;
-    }
-
-    /**
-     * Content boundaries max (roughly (0,0)+Size-Scroll) where Size can be override with SetNextWindowContentSize(), in window coordinates
-     */
-    public static native void getWindowContentRegionMin(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetWindowContentRegionMin(), dstImVec2);
-    */
-
-    /**
-     * Content boundaries max (roughly (0,0)+Size-Scroll) where Size can be override with SetNextWindowContentSize(), in window coordinates
-     */
-    public static native float getWindowContentRegionMinX(); /*
-        return ImGui::GetWindowContentRegionMin().x;
-    */
-
-    /**
-     * Content boundaries max (roughly (0,0)+Size-Scroll) where Size can be override with SetNextWindowContentSize(), in window coordinates
-     */
-    public static native float getWindowContentRegionMinY(); /*
-        return ImGui::GetWindowContentRegionMin().y;
-    */
-
-    public static ImVec2 getWindowContentRegionMax() {
-        final ImVec2 value = new ImVec2();
-        getWindowContentRegionMax(value);
-        return value;
-    }
-
-    public static native void getWindowContentRegionMax(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetWindowContentRegionMax(), dstImVec2);
-    */
-
-    public static native float getWindowContentRegionMaxX(); /*
-        return ImGui::GetWindowContentRegionMax().x;
-    */
-
-    public static native float getWindowContentRegionMaxY(); /*
-        return ImGui::GetWindowContentRegionMax().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetWindowContentRegionMax();
 
     // Windows Scrolling
+    // - Any change of Scroll will be applied at the beginning of next frame in the first call to Begin().
+    // - You may instead use SetNextWindowScroll() prior to calling Begin() to avoid this delay, as an alternative to using SetScrollX()/SetScrollY().
 
     /**
      * Get scrolling amount [0 .. GetScrollMaxX()]
      */
-    public static native float getScrollX(); /*
-        return ImGui::GetScrollX();
-    */
+    @BindingMethod
+    public static native float GetScrollX();
 
     /**
      * Get scrolling amount [0 .. GetScrollMaxY()]
      */
-    public static native float getScrollY(); /*
-        return ImGui::GetScrollY();
-    */
+    @BindingMethod
+    public static native float GetScrollY();
 
     /**
      * Set scrolling amount [0 .. GetScrollMaxX()]
      */
-    public static native void setScrollX(float scrollX); /*
-        ImGui::SetScrollX(scrollX);
-    */
+    @BindingMethod
+    public static native void SetScrollX(float scrollX);
 
     /**
      * Set scrolling amount [0..GetScrollMaxY()]
      */
-    public static native void setScrollY(float scrollY); /*
-        ImGui::SetScrollY(scrollY);
-    */
+    @BindingMethod
+    public static native void SetScrollY(float scrollY);
 
     /**
      * Get maximum scrolling amount ~~ ContentSize.x - WindowSize.x - DecorationsSize.x
      */
-    public static native float getScrollMaxX(); /*
-        return ImGui::GetScrollMaxX();
-    */
+    @BindingMethod
+    public static native float GetScrollMaxX();
 
     /**
      * Get maximum scrolling amount ~~ ContentSize.y - WindowSize.y - DecorationsSize.y
      */
-    public static native float getScrollMaxY(); /*
-        return ImGui::GetScrollMaxY();
-    */
+    @BindingMethod
+    public static native float GetScrollMaxY();
 
     /**
      * Adjust scrolling amount to make current cursor position visible. center_x_ratio=0.0: left, 0.5: center, 1.0: right.
      * When using to make a "default/current item" visible, consider using SetItemDefaultFocus() instead.
      */
-    public static native void setScrollHereX(); /*
-        ImGui::SetScrollHereX();
-    */
-
-    /**
-     * Adjust scrolling amount to make current cursor position visible. center_x_ratio=0.0: left, 0.5: center, 1.0: right.
-     * When using to make a "default/current item" visible, consider using SetItemDefaultFocus() instead.
-     */
-    public static native void setScrollHereX(float centerXRatio); /*
-        ImGui::SetScrollHereX(centerXRatio);
-    */
+    @BindingMethod
+    public static native void SetScrollHereX(@OptArg float centerXRatio);
 
     /**
      * Adjust scrolling amount to make current cursor position visible. center_y_ratio=0.0: top, 0.5: center, 1.0: bottom.
      * When using to make a "default/current item" visible, consider using SetItemDefaultFocus() instead.
      */
-    public static native void setScrollHereY(); /*
-        ImGui::SetScrollHereY();
-    */
-
-    /**
-     * Adjust scrolling amount to make current cursor position visible. center_y_ratio=0.0: top, 0.5: center, 1.0: bottom.
-     * When using to make a "default/current item" visible, consider using SetItemDefaultFocus() instead.
-     */
-    public static native void setScrollHereY(float centerYRatio); /*
-        ImGui::SetScrollHereY(centerYRatio);
-    */
+    @BindingMethod
+    public static native void SetScrollHereY(@OptArg float centerYRatio);
 
     /**
      * Adjust scrolling amount to make given position visible. Generally GetCursorStartPos() + offset to compute a valid position.
      */
-    public static native void setScrollFromPosX(float localX); /*
-        ImGui::SetScrollFromPosX(localX);
-    */
+    @BindingMethod
+    public static native void SetScrollFromPosX(float localX, @OptArg float centerXRatio);
 
     /**
      * Adjust scrolling amount to make given position visible. Generally GetCursorStartPos() + offset to compute a valid position.
      */
-    public static native void setScrollFromPosX(float localX, float centerXRatio); /*
-        ImGui::SetScrollFromPosX(localX, centerXRatio);
-    */
-
-    /**
-     * Adjust scrolling amount to make given position visible. Generally GetCursorStartPos() + offset to compute a valid position.
-     */
-    public static native void setScrollFromPosY(float localY); /*
-        ImGui::SetScrollFromPosY(localY);
-    */
-
-    /**
-     * Adjust scrolling amount to make given position visible. Generally GetCursorStartPos() + offset to compute a valid position.
-     */
-    public static native void setScrollFromPosY(float localY, float centerYRatio); /*
-        ImGui::SetScrollFromPosY(localY, centerYRatio);
-    */
+    @BindingMethod
+    public static native void SetScrollFromPosY(float localY, @OptArg float centerYRatio);
 
     // Parameters stacks (shared)
 
-    public static void pushFont(ImFont font) {
-        nPushFont(font.ptr);
-    }
+    @BindingMethod
+    public static native void PushFont(ImFont font);
 
-    private static native void nPushFont(long fontPtr); /*
-        ImGui::PushFont((ImFont*)fontPtr);
-    */
-
-    public static native void popFont(); /*
-        ImGui::PopFont();
-    */
-
-    /**
-     * Modify a style color. always use this if you modify the style after NewFrame().
-     */
-    public static native void pushStyleColor(int imGuiCol, float r, float g, float b, float a); /*
-        ImGui::PushStyleColor(imGuiCol, (ImU32)ImColor((float)r, (float)g, (float)b, (float)a));
-    */
+    @BindingMethod
+    public static native void PopFont();
 
     /**
      * Modify a style color. always use this if you modify the style after NewFrame().
@@ -1143,62 +659,51 @@ public class ImGui {
     /**
      * Modify a style color. always use this if you modify the style after NewFrame().
      */
-    public static native void pushStyleColor(int imGuiCol, int col); /*
-        ImGui::PushStyleColor(imGuiCol, col);
-    */
+    @BindingMethod
+    public static native void PushStyleColor(final int imGuiCol, final ImVec4 col);
 
-    public static native void popStyleColor(); /*
-        ImGui::PopStyleColor();
-    */
+    /**
+     * Modify a style color. always use this if you modify the style after NewFrame().
+     */
+    @BindingMethod
+    public static native void PushStyleColor(int imGuiCol, int col);
 
-    public static native void popStyleColor(int count); /*
-        ImGui::PopStyleColor(count);
-    */
+    @BindingMethod
+    public static native void PopStyleColor(@OptArg int count);
 
     /**
      * Modify a style float variable. always use this if you modify the style after NewFrame().
      */
-    public static native void pushStyleVar(int imGuiStyleVar, float val); /*
-        ImGui::PushStyleVar(imGuiStyleVar, val);
-    */
+    @BindingMethod
+    public static native void PushStyleVar(int imGuiStyleVar, float val);
 
     /**
      * Modify a style ImVec2 variable. always use this if you modify the style after NewFrame().
      */
-    public static native void pushStyleVar(int imGuiStyleVar, float valX, float valY); /*
-        ImGui::PushStyleVar(imGuiStyleVar, ImVec2(valX, valY));
-    */
+    @BindingMethod
+    public static native void PushStyleVar(int imGuiStyleVar, ImVec2 val);
 
-    public static native void popStyleVar(); /*
-        ImGui::PopStyleVar();
-    */
-
-    public static native void popStyleVar(int count); /*
-        ImGui::PopStyleVar(count);
-    */
+    @BindingMethod
+    public static native void PopStyleVar(@OptArg int count);
 
     /**
-     * Allow focusing using TAB/Shift-TAB, enabled by default but you can disable it for certain widgets
+     * Tab stop enable. Allow focusing using TAB/Shift-TAB, enabled by default but you can disable it for certain widgets
      */
-    public static native void pushAllowKeyboardFocus(boolean allowKeyboardFocus); /*
-        ImGui::PushAllowKeyboardFocus(allowKeyboardFocus);
-    */
+    @BindingMethod
+    public static native void PushTabStop(boolean tabStop);
 
-    public static native void popAllowKeyboardFocus(); /*
-        ImGui::PopAllowKeyboardFocus();
-    */
+    @BindingMethod
+    public static native void PopTabStop();
 
     /**
      * In 'repeat' mode, Button*() functions return repeated true in a typematic manner (using io.KeyRepeatDelay/io.KeyRepeatRate setting).
      * Note that you can call IsItemActive() after any Button() to tell if the button is held in the current frame.
      */
-    public static native void pushButtonRepeat(boolean repeat); /*
-        ImGui::PushButtonRepeat(repeat);
-    */
+    @BindingMethod
+    public static native void PushButtonRepeat(boolean repeat);
 
-    public static native void popButtonRepeat(); /*
-        ImGui::PopButtonRepeat();
-    */
+    @BindingMethod
+    public static native void PopButtonRepeat();
 
     // Parameters stacks (current window)
 
@@ -1206,246 +711,188 @@ public class ImGui {
      * Push width of items for common large "item+label" widgets. {@code > 0.0f}: width in pixels,
      * {@code <0.0f} align xx pixels to the right of window (so -1.0f always align width to the right side).
      */
-    public static native void pushItemWidth(float itemWidth); /*
-        ImGui::PushItemWidth(itemWidth);
-    */
+    @BindingMethod
+    public static native void PushItemWidth(float itemWidth);
 
-    public static native void popItemWidth(); /*
-        ImGui::PopItemWidth();
-    */
+    @BindingMethod
+    public static native void PopItemWidth();
 
     /**
      * Set width of the _next_ common large "item+label" widget. {@code > 0.0f}: width in pixels,
      * {@code <0.0f} align xx pixels to the right of window (so -1.0f always align width to the right side)
      */
-    public static native void setNextItemWidth(float itemWidth); /*
-        ImGui::SetNextItemWidth(itemWidth);
-    */
+    @BindingMethod
+    public static native void SetNextItemWidth(float itemWidth);
 
     /**
      * Width of item given pushed settings and current cursor position. NOT necessarily the width of last item unlike most 'Item' functions.
      */
-    public static native float calcItemWidth(); /*
-        return ImGui::CalcItemWidth();
-    */
+    @BindingMethod
+    public static native float CalcItemWidth();
 
     /**
      * Push Word-wrapping positions for Text*() commands. {@code < 0.0f}: no wrapping; 0.0f: wrap to end of window (or column); {@code > 0.0f}: wrap at
      * 'wrap_posX' position in window local space
      */
-    public static native void pushTextWrapPos(); /*
-        ImGui::PushTextWrapPos();
-    */
+    @BindingMethod
+    public static native void PushTextWrapPos(@OptArg float wrapLocalPosX);
 
-    /**
-     * Push Word-wrapping positions for Text*() commands. {@code < 0.0f}: no wrapping; 0.0f: wrap to end of window (or column); {@code > 0.0f}: wrap at
-     * 'wrap_posX' position in window local space
-     */
-    public static native void pushTextWrapPos(float wrapLocalPosX); /*
-        ImGui::PushTextWrapPos(wrapLocalPosX);
-    */
-
-    public static native void popTextWrapPos(); /*
-        ImGui::PopTextWrapPos();
-    */
+    @BindingMethod
+    public static native void PopTextWrapPos();
 
     // Style read access
+    // - Use the ShowStyleEditor() function to interactively see/edit the colors.
 
     /**
      * Get current font.
      */
-    public static ImFont getFont() {
-        FONT.ptr = nGetFont();
-        return FONT;
-    }
-
-    private static native long nGetFont(); /*
-        return (intptr_t)ImGui::GetFont();
-    */
+    @BindingMethod
+    @ReturnValue(isStatic = true)
+    public static native ImFont GetFont();
 
     /**
      * Get current font size (= height in pixels) of current font with current scale applied
      */
-    public static native int getFontSize(); /*
-        return ImGui::GetFontSize();
-    */
+    @BindingMethod
+    public static native int GetFontSize();
 
     /**
      * Get UV coordinate for a while pixel, useful to draw custom shapes via the ImDrawList API
      */
-    public static ImVec2 getFontTexUvWhitePixel() {
-        final ImVec2 value = new ImVec2();
-        getFontTexUvWhitePixel(value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec2 GetFontTexUvWhitePixel();
 
     /**
-     * Get UV coordinate for a while pixel, useful to draw custom shapes via the ImDrawList API
+     * Retrieve given style color with style alpha applied and optional extra alpha multiplier, packed as a 32-bit value suitable for ImDrawList.
      */
-    public static native void getFontTexUvWhitePixel(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetFontTexUvWhitePixel(), dstImVec2);
-    */
+    @BindingMethod
+    public static native int GetColorU32(@ArgValue(staticCast = "ImGuiCol") int idx, @OptArg float alphaMul);
 
     /**
-     * Get UV coordinate for a while pixel, useful to draw custom shapes via the ImDrawList API
+     * Retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList.
      */
-    public static native float getFontTexUvWhitePixelX(); /*
-        return ImGui::GetFontTexUvWhitePixel().x;
-    */
+    @BindingMethod
+    public static native int GetColorU32(ImVec4 col);
 
     /**
-     * Get UV coordinate for a while pixel, useful to draw custom shapes via the ImDrawList API
+     * Retrieve given color with style alpha applied, packed as a 32-bit value suitable for ImDrawList.
      */
-    public static native float getFontTexUvWhitePixelY(); /*
-        return ImGui::GetFontTexUvWhitePixel().y;
-    */
-
-    /**
-     * Retrieve given style color with style alpha applied and optional extra alpha multiplier
-     */
-    public static native int getColorU32(int imGuiCol); /*
-        return ImGui::GetColorU32((ImGuiCol)imGuiCol);
-    */
-
-    /**
-     * Retrieve given style color with style alpha applied and optional extra alpha multiplier
-     */
-    public static native int getColorU32(int imGuiCol, float alphaMul); /*
-        return ImGui::GetColorU32(imGuiCol, alphaMul);
-    */
-
-    /**
-     * Retrieve given color with style alpha applied
-     */
-    public static native int getColorU32(float r, float g, float b, float a); /*
-        return ImGui::GetColorU32(ImVec4(r, g, b, a));
-    */
-
-    /**
-     * Retrieve given color with style alpha applied
-     * <p>
-     * BINDING NOTICE: Since {@link #getColorU32(int)} has the same signature, this specific method has an 'i' suffix.
-     */
-    public static native int getColorU32i(int col); /*
-        return ImGui::GetColorU32((ImU32)col);
-    */
+    @BindingMethod(callName = "GetColorU32")
+    public static native int GetColorU32i(@ArgValue(staticCast = "ImU32") int col, @OptArg float alphaMul);
 
     /**
      * Retrieve style color as stored in ImGuiStyle structure. use to feed back into PushStyleColor(),
      * otherwise use GetColorU32() to get style color with style alpha baked in.
      */
-    public ImVec4 getStyleColorVec4(final int imGuiStyleVar) {
-        final ImVec4 value = new ImVec4();
-        getStyleColorVec4(imGuiStyleVar, value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec4 GetStyleColorVec4(int imGuiColIdx);
 
-    /**
-     * Retrieve style color as stored in ImGuiStyle structure. use to feed back into PushStyleColor(),
-     * otherwise use GetColorU32() to get style color with style alpha baked in.
-     */
-    public static native void getStyleColorVec4(int imGuiStyleVar, ImVec4 dstImVec4); /*
-        Jni::ImVec4Cpy(env, ImGui::GetStyleColorVec4(imGuiStyleVar), dstImVec4);
-    */
-
-    // Cursor / Layout
+    // Layout cursor positioning
     // - By "cursor" we mean the current output position.
     // - The typical widget behavior is to output themselves at the current cursor position, then move the cursor one line down.
     // - You can call SameLine() between widgets to undo the last carriage return and output at the right of the preceding widget.
     // - Attention! We currently have inconsistencies between window-local and absolute positions we will aim to fix with future API:
-    //    Window-local coordinates:   SameLine(), GetCursorPos(), SetCursorPos(), GetCursorStartPos(), GetContentRegionMax(), GetWindowContentRegion*(), PushTextWrapPos()
-    //    Absolute coordinate:        GetCursorScreenPos(), SetCursorScreenPos(), all ImDrawList:: functions.
+    //    - Absolute coordinate:        GetCursorScreenPos(), SetCursorScreenPos(), all ImDrawList:: functions. -> this is the preferred way forward.
+    //    - Window-local coordinates:   SameLine(), GetCursorPos(), SetCursorPos(), GetCursorStartPos(), GetContentRegionMax(), GetWindowContentRegion*(), PushTextWrapPos()
+    // - GetCursorScreenPos() = GetCursorPos() + GetWindowPos(). GetWindowPos() is almost only ever useful to convert from window-local to absolute coordinates.
+
+    /**
+     * Cursor position in absolute coordinates (prefer using this, also more useful to work with ImDrawList API).
+     */
+    @BindingMethod
+    public static native ImVec2 GetCursorScreenPos();
+
+    /**
+     * Cursor position in absolute coordinates.
+     */
+    @BindingMethod
+    public static native void SetCursorScreenPos(ImVec2 pos);
+
+    /**
+     * Cursor position in window coordinates (relative to window position)
+     */
+    @BindingMethod
+    public static native ImVec2 GetCursorPos();
+
+    /**
+     * Cursor position in window coordinates (relative to window position)
+     */
+    @BindingMethod
+    public static native void SetCursorPos(ImVec2 localPos);
+
+    /**
+     * Cursor position in window coordinates (relative to window position)
+     */
+    @BindingMethod
+    public static native void SetCursorPosX(float localX);
+
+    /**
+     * Cursor position in window coordinates (relative to window position)
+     */
+    @BindingMethod
+    public static native void SetCursorPosY(float localY);
+
+    /**
+     * Initial cursor position in window coordinates
+     */
+    @BindingMethod
+    public static native ImVec2 GetCursorStartPos();
+
+    // Other layout functions
 
     /**
      * Separator, generally horizontal. inside a menu bar or in horizontal layout mode, this becomes a vertical separator.
      */
-    public static native void separator(); /*
-        ImGui::Separator();
-    */
+    @BindingMethod
+    public static native void Separator();
 
     /**
      * Call between widgets or groups to layout them horizontally. X position given in window coordinates.
      */
-    public static native void sameLine(); /*
-        ImGui::SameLine();
-    */
+    @BindingMethod
+    public static native void SameLine(@OptArg float offsetFromStartX, @OptArg float spacing);
 
     /**
-     * Call between widgets or groups to layout them horizontally. X position given in window coordinates.
+     * Undo a SameLine() or force a new line when in a horizontal-layout context.
      */
-    public static native void sameLine(float offsetFromStartX); /*
-        ImGui::SameLine(offsetFromStartX);
-    */
-
-    /**
-     * Call between widgets or groups to layout them horizontally. X position given in window coordinates.
-     */
-    public static native void sameLine(float offsetFromStartX, float spacing); /*
-        ImGui::SameLine(offsetFromStartX, spacing);
-    */
-
-    /**
-     * Undo a SameLine() or force a new line when in an horizontal-layout context.
-     */
-    public static native void newLine(); /*
-        ImGui::NewLine();
-    */
+    @BindingMethod
+    public static native void NewLine();
 
     /**
      * Add vertical spacing.
      */
-    public static native void spacing(); /*
-        ImGui::Spacing();
-    */
+    @BindingMethod
+    public static native void Spacing();
 
     /**
      * Add a dummy item of given size. unlike InvisibleButton(), Dummy() won't take the mouse click or be navigable into.
      */
-    public static native void dummy(float width, float height); /*
-        ImGui::Dummy(ImVec2(width, height));
-    */
+    @BindingMethod
+    public static native void Dummy(ImVec2 size);
 
     /**
      * Move content position toward the right, by indent_w, or style.IndentSpacing if indent_w {@code <= 0}.
      */
-    public static native void indent(); /*
-        ImGui::Indent();
-    */
-
-    /**
-     * Move content position toward the right, by indent_w, or style.IndentSpacing if indent_w {@code <= 0}.
-     */
-    public static native void indent(float indentW); /*
-        ImGui::Indent(indentW);
-    */
+    @BindingMethod
+    public static native void Indent(@OptArg float indentW);
 
     /**
      * Move content position back to the left, by indent_w, or style.IndentSpacing if indent_w {@code <= 0}.
      */
-    public static native void unindent(); /*
-        ImGui::Unindent();
-    */
-
-    /**
-     * Move content position back to the left, by indent_w, or style.IndentSpacing if indent_w {@code <= 0}.
-     */
-    public static native void unindent(float indentW); /*
-        ImGui::Unindent(indentW);
-    */
+    @BindingMethod
+    public static native void Unindent(@OptArg float indentW);
 
     /**
      * Lock horizontal starting position
      */
-    public static native void beginGroup(); /*
-        ImGui::BeginGroup();
-    */
+    @BindingMethod
+    public static native void BeginGroup();
 
     /**
      * Unlock horizontal starting position + capture the whole group bounding box into one "item" (so you can use IsItemHovered() or layout primitives such as SameLine() on whole group, etc.)
      */
-    public static native void endGroup(); /*
-        ImGui::EndGroup();
-    */
+    @BindingMethod
+    public static native void EndGroup();
 
     // (some functions are using window-relative coordinates, such as: GetCursorPos, GetCursorStartPos, GetContentRegionMax, GetWindowContentRegion* etc.
     //  other functions such as GetCursorScreenPos or everything in ImDrawList::
@@ -1453,228 +900,94 @@ public class ImGui {
     //  GetWindowPos() + GetCursorPos() == GetCursorScreenPos() etc.)
 
     /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static ImVec2 getCursorPos() {
-        final ImVec2 value = new ImVec2();
-        getCursorPos(value);
-        return value;
-    }
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native void getCursorPos(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetCursorPos(), dstImVec2);
-    */
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native float getCursorPosX(); /*
-        return ImGui::GetCursorPosX();
-    */
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native float getCursorPosY(); /*
-        return ImGui::GetCursorPosY();
-    */
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native void setCursorPos(float x, float y); /*
-        ImGui::SetCursorPos(ImVec2(x, y));
-    */
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native void setCursorPosX(float x); /*
-        ImGui::SetCursorPosX(x);
-    */
-
-    /**
-     * Cursor position in window coordinates (relative to window position)
-     */
-    public static native void setCursorPosY(float y); /*
-        ImGui::SetCursorPosY(y);
-    */
-
-    /**
-     * Initial cursor position in window coordinates
-     */
-    public static ImVec2 getCursorStartPos() {
-        final ImVec2 value = new ImVec2();
-        getCursorStartPos(value);
-        return value;
-    }
-
-    /**
-     * Initial cursor position in window coordinates
-     */
-    public static native void getCursorStartPos(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetCursorStartPos(), dstImVec2);
-    */
-
-    /**
-     * Initial cursor position in window coordinates
-     */
-    public static native float getCursorStartPosX(); /*
-        return ImGui::GetCursorStartPos().x;
-    */
-
-    /**
-     * Initial cursor position in window coordinates
-     */
-    public static native float getCursorStartPosY(); /*
-        return ImGui::GetCursorStartPos().y;
-    */
-
-    /**
-     * Cursor position in absolute coordinates (useful to work with ImDrawList API).
-     * Generally top-left == GetMainViewport().Pos == (0,0) in single viewport mode,
-     * and bottom-right == GetMainViewport().Pos+Size == io.DisplaySize in single-viewport mode.
-     */
-    public static ImVec2 getCursorScreenPos() {
-        final ImVec2 value = new ImVec2();
-        getCursorScreenPos(value);
-        return value;
-    }
-
-    /**
-     * Cursor position in absolute coordinates (useful to work with ImDrawList API).
-     * Generally top-left == GetMainViewport().Pos == (0,0) in single viewport mode,
-     * and bottom-right == GetMainViewport().Pos+Size == io.DisplaySize in single-viewport mode.
-     */
-    public static native void getCursorScreenPos(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetCursorScreenPos(), dstImVec2);
-     */
-
-    /**
-     * Cursor position in absolute coordinates (useful to work with ImDrawList API).
-     * Generally top-left == GetMainViewport().Pos == (0,0) in single viewport mode,
-     * and bottom-right == GetMainViewport().Pos+Size == io.DisplaySize in single-viewport mode.
-     */
-    public static native float getCursorScreenPosX(); /*
-        return ImGui::GetCursorScreenPos().x;
-    */
-
-    /**
-     * Cursor position in absolute coordinates (useful to work with ImDrawList API).
-     * Generally top-left == GetMainViewport().Pos == (0,0) in single viewport mode,
-     * and bottom-right == GetMainViewport().Pos+Size == io.DisplaySize in single-viewport mode.
-     */
-    public static native float getCursorScreenPosY(); /*
-        return ImGui::GetCursorScreenPos().y;
-    */
-
-    /**
-     * Cursor position in absolute coordinates.
-     */    public static native void setCursorScreenPos(float x, float y); /*
-        ImGui::SetCursorScreenPos(ImVec2(x, y));
-    */
-
-    /**
      * Vertically align upcoming text baseline to FramePadding.y so that it will align properly to regularly framed items (call if you have text on a line before a framed item)
      */
-    public static native void alignTextToFramePadding(); /*
-        ImGui::AlignTextToFramePadding();
-    */
+    @BindingMethod
+    public static native void AlignTextToFramePadding();
 
     /**
      * ~ FontSize
      */
-    public static native float getTextLineHeight(); /*
-        return ImGui::GetTextLineHeight();
-    */
+    @BindingMethod
+    public static native float GetTextLineHeight();
 
     /**
      * ~ FontSize + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of text)
      */
-    public static native float getTextLineHeightWithSpacing(); /*
-        return ImGui::GetTextLineHeightWithSpacing();
-    */
+    @BindingMethod
+    public static native float GetTextLineHeightWithSpacing();
 
     /**
      * ~ FontSize + style.FramePadding.y * 2
      */
-    public static native float getFrameHeight(); /*
-        return ImGui::GetFrameHeight();
-    */
+    @BindingMethod
+    public static native float GetFrameHeight();
 
     /**
      * ~ FontSize + style.FramePadding.y * 2 + style.ItemSpacing.y (distance in pixels between 2 consecutive lines of framed widgets)
      */
-    public static native float getFrameHeightWithSpacing(); /*
-        return ImGui::GetFrameHeightWithSpacing();
-    */
+    @BindingMethod
+    public static native float GetFrameHeightWithSpacing();
 
     // ID stack/scopes
-    // - Read the FAQ for more details about how ID are handled in dear imgui. If you are creating widgets in a loop you most
-    //   likely want to push a unique identifier (e.g. object pointer, loop index) to uniquely differentiate them.
-    // - The resulting ID are hashes of the entire stack.
+    // Read the FAQ (docs/FAQ.md or http://dearimgui.com/faq) for more details about how ID are handled in dear imgui.
+    // - Those questions are answered and impacted by understanding of the ID stack system:
+    //   - "Q: Why is my widget not reacting when I click on it?"
+    //   - "Q: How can I have widgets with an empty label?"
+    //   - "Q: How can I have multiple widgets with the same label?"
+    // - Short version: ID are hashes of the entire ID stack. If you are creating widgets in a loop you most likely
+    //   want to push a unique identifier (e.g. object pointer, loop index) to uniquely differentiate them.
     // - You can also use the "Label##foobar" syntax within widget label to distinguish them from each others.
-    // - In this header file we use the "label"/"name" terminology to denote a string that will be displayed and used as an ID,
-    //   whereas "strId" denote a string that is only used as an ID and not normally displayed.
+    // - In this header file we use the "label"/"name" terminology to denote a string that will be displayed + used as an ID,
+    //   whereas "str_id" denote a string that is only used as an ID and not normally displayed.
 
     /**
      * Push string into the ID stack (will hash string).
      */
-    public static native void pushID(String strId); /*
-        ImGui::PushID(strId);
-    */
+    @BindingMethod
+    public static native void PushID(String strId);
 
     /**
      * Push string into the ID stack (will hash string).
      */
-    public static native void pushID(String strIdBegin, String strIdEnd); /*
-        ImGui::PushID(strIdBegin, strIdEnd);
-    */
+    @BindingMethod
+    public static native void PushID(String strIdBegin, String strIdEnd);
 
     /**
      * Push pointer into the ID stack (will hash pointer).
      */
-    public static native void pushID(long ptrId); /*
-        ImGui::PushID((void*)ptrId);
-    */
+    @BindingMethod
+    public static native void PushID(@ArgValue(callPrefix = "(void*)") long ptrId);
 
     /**
      * Push integer into the ID stack (will hash integer).
      */
-    public static native void pushID(int intId); /*
-        ImGui::PushID(intId);
-    */
+    @BindingMethod
+    public static native void PushID(int intId);
 
     /**
      * Pop from the ID stack.
      */
-    public static native void popID(); /*
-        ImGui::PopID();
-    */
+    @BindingMethod
+    public static native void PopID();
 
     /**
      * Calculate unique ID (hash of whole ID stack + given parameter). e.g. if you want to query into ImGuiStorage yourself
      */
-    public static native int getID(String strId); /*
-        return ImGui::GetID(strId);
-    */
+    @BindingMethod
+    public static native int GetID(String strId);
 
     /**
      * Calculate unique ID (hash of whole ID stack + given parameter). e.g. if you want to query into ImGuiStorage yourself
      */
-    public static native int getID(String strIdBegin, String strIdEnd); /*
-        return ImGui::GetID(strIdBegin, strIdEnd);
-    */
+    @BindingMethod
+    public static native int GetID(String strIdBegin, String strIdEnd);
 
     /**
      * Calculate unique ID (hash of whole ID stack + given parameter). e.g. if you want to query into ImGuiStorage yourself
      */
-    public static native int getID(long ptrId); /*
-        return ImGui::GetID((void*)ptrId);
-    */
+    @BindingMethod
+    public static native int GetID(@ArgValue(callPrefix = "(void*)") long ptrId);
 
     // Widgets: Text
 
@@ -1683,25 +996,20 @@ public class ImGui {
      * A) doesn't require null terminated string if 'textEnd' is specified,
      * B) it's faster, no memory copy is done, no buffer size limits, recommended for long chunks of text.
      */
-    public static native void textUnformatted(String text); /*
-        ImGui::TextUnformatted(text);
-    */
+    @BindingMethod
+    public static native void TextUnformatted(String text, @OptArg String textEnd);
 
     /**
      * Formatted text
-     * <p>
-     * BINDING NOTICE: Since all text formatting could be done on Java side, this call is equal to {@link ImGui#textUnformatted(String)}.
      */
-    public static native void text(String text); /*
-        ImGui::TextUnformatted(text);
-    */
+    @BindingMethod
+    public static native void Text(String text, Void NULL);
 
     /**
      * Shortcut for PushStyleColor(ImGuiCol_Text, col); Text(fmt, ...); PopStyleColor();
      */
-    public static native void textColored(float r, float g, float b, float a, String text); /*
-        ImGui::TextColored(ImColor((float)r, (float)g, (float)b, (float)a), text, NULL);
-    */
+    @BindingMethod
+    public static native void TextColored(ImVec4 col, String text, Void NULL);
 
     /**
      * Shortcut for PushStyleColor(ImGuiCol_Text, col); Text(fmt, ...); PopStyleColor();
@@ -1720,32 +1028,34 @@ public class ImGui {
     /**
      * Shortcut for PushStyleColor(ImGuiCol_Text, style.Colors[ImGuiCol_TextDisabled]); Text(fmt, ...); PopStyleColor();
      */
-    public static native void textDisabled(String text); /*
-        ImGui::TextDisabled(text, NULL);
-    */
+    @BindingMethod
+    public static native void TextDisabled(String text, Void NULL);
 
     /**
      * Shortcut for PushTextWrapPos(0.0f); Text(fmt, ...); PopTextWrapPos();.
      * Note that this won't work on an auto-resizing window if there's no other widgets to extend the window width,
      * yoy may need to set a size using SetNextWindowSize().
      */
-    public static native void textWrapped(String text); /*
-        ImGui::TextWrapped(text, NULL);
-    */
+    @BindingMethod
+    public static native void TextWrapped(String text, Void NULL);
 
     /**
      * Display text+label aligned the same way as value+label widgets
      */
-    public static native void labelText(String label, String text); /*
-        ImGui::LabelText(label, text, NULL);
-    */
+    @BindingMethod
+    public static native void LabelText(String label, String text, Void NULL);
 
     /**
      * Shortcut for Bullet()+Text()
      */
-    public static native void bulletText(String text); /*
-        ImGui::BulletText(text, NULL);
-    */
+    @BindingMethod
+    public static native void BulletText(String text, Void NULL);
+
+    /**
+     * Currently: formatted text with an horizontal line
+     */
+    @BindingMethod
+    public static native void SeparatorText(String label);
 
     // Widgets: Main
     // - Most widgets return true when the value has been changed or when pressed/selected
@@ -1754,229 +1064,98 @@ public class ImGui {
     /**
      * Button
      */
-    public static native boolean button(String label); /*
-        return ImGui::Button(label);
-    */
+    @BindingMethod
+    public static native boolean Button(String label, @OptArg ImVec2 size);
 
     /**
-     * Button
+     * Button with (FramePadding.y == 0) to easily embed within text
      */
-    public static native boolean button(String label, float width, float height); /*
-        return ImGui::Button(label, ImVec2(width, height));
-    */
-
-    /**
-     * Button with FramePadding=(0,0) to easily embed within text
-     */
-    public static native boolean smallButton(String label); /*
-        return ImGui::SmallButton(label);
-    */
+    @BindingMethod
+    public static native boolean SmallButton(String label);
 
     /**
      * Flexible button behavior without the visuals, frequently useful to build custom behaviors using the public api (along with IsItemActive, IsItemHovered, etc.)
      */
-    public static native boolean invisibleButton(String strId, float width, float height); /*
-        return ImGui::InvisibleButton(strId, ImVec2(width, height));
-    */
-
-    /**
-     * Flexible button behavior without the visuals, frequently useful to build custom behaviors using the public api (along with IsItemActive, IsItemHovered, etc.)
-     */
-    public static native boolean invisibleButton(String strId, float width, float height, int imGuiButtonFlags); /*
-        return ImGui::InvisibleButton(strId, ImVec2(width, height), imGuiButtonFlags);
-    */
+    @BindingMethod
+    public static native boolean InvisibleButton(String strId, ImVec2 size, @OptArg int imGuiButtonFlags);
 
     /**
      * Square button with an arrow shape
      */
-    public static native boolean arrowButton(String strId, int dir); /*
-        return ImGui::ArrowButton(strId, dir);
-    */
+    @BindingMethod
+    public static native boolean ArrowButton(String strId, @ArgValue(staticCast = "ImGuiDir") int dir);
 
-    public static native void image(int textureID, float sizeX, float sizeY); /*
-        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY));
-    */
+    public static boolean checkbox(String label, boolean active) {
+        return nCheckbox(label, active);
+    }
 
-    public static native void image(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y); /*
-        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y));
-    */
-
-    public static native void image(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y); /*
-        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y));
-    */
-
-    public static native void image(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y, float tintColorR, float tintColorG, float tintColorB, float tintColorA); /*
-        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y), ImVec4(tintColorR, tintColorG, tintColorB, tintColorA));
-    */
-
-    public static native void image(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y, float tintColorR, float tintColorG, float tintColorB, float tintColorA, float borderR, float borderG, float borderB, float borderA); /*
-        ImGui::Image((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y), ImVec4(tintColorR, tintColorG, tintColorB, tintColorA), ImVec4(borderR, borderG, borderB, borderA));
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY));
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y));
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y));
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y, int framePadding); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y), framePadding);
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y, int framePadding, float bgColorR, float bgColorG, float bgColorB, float bgColorA); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y), framePadding, ImVec4(bgColorR, bgColorG, bgColorB, bgColorA));
-    */
-
-    /**
-     * {@code <0} framePadding uses default frame padding settings. 0 for no padding
-     */
-    public static native boolean imageButton(int textureID, float sizeX, float sizeY, float uv0X, float uv0Y, float uv1X, float uv1Y, int framePadding, float bgColorR, float bgColorG, float bgColorB, float bgColorA, float tintR, float tintG, float tintB, float tintA); /*
-        return ImGui::ImageButton((ImTextureID)(intptr_t)textureID, ImVec2(sizeX, sizeY), ImVec2(uv0X, uv0Y), ImVec2(uv1X, uv1Y), framePadding, ImVec4(bgColorR, bgColorG, bgColorB, bgColorA), ImVec4(tintR, tintG, tintB, tintA));
-    */
-
-    public static native boolean checkbox(String label, boolean active); /*
+    private static native boolean nCheckbox(String label, boolean active); /*
         bool flag = (bool)active;
         return ImGui::Checkbox(label, &flag);
     */
 
-    public static boolean checkbox(String label, ImBoolean active) {
-        return nCheckbox(label, active.getData());
-    }
+    @BindingMethod
+    public static native boolean Checkbox(String label, ImBoolean data);
 
-    private static native boolean nCheckbox(String label, boolean[] data); /*
-        return ImGui::Checkbox(label, &data[0]);
-    */
-
-    public static boolean checkboxFlags(String label, ImInt v, int flagsValue) {
-        return nCheckboxFlags(label, v.getData(), flagsValue);
-    }
-
-    private static native boolean nCheckboxFlags(String label, int[] data, int flagsValue); /*
-        return ImGui::CheckboxFlags(label, (unsigned int*)&data[0], flagsValue);
-    */
+    @BindingMethod
+    public static native boolean CheckboxFlags(String label, ImInt flags, int flagsValue);
 
     /**
      * Use with e.g. if (RadioButton("one", my_value==1)) { my_value = 1; }
      */
-    public static native boolean radioButton(String label, boolean active); /*
-        return ImGui::RadioButton(label, active);
-    */
+    @BindingMethod
+    public static native boolean RadioButton(String label, boolean active);
 
     /**
      * Shortcut to handle the above pattern when value is an integer
      */
-    public static boolean radioButton(String label, ImInt v, int vButton) {
-        return nRadioButton(label, v.getData(), vButton);
-    }
+    @BindingMethod
+    public static native boolean RadioButton(String label, ImInt v, int vButton);
 
-    private static native boolean nRadioButton(String label, int[] data, int vButton); /*
-        return ImGui::RadioButton(label, &data[0], vButton);
-    */
-
-    public static native void progressBar(float fraction); /*
-        ImGui::ProgressBar(fraction);
-    */
-
-    public static native void progressBar(float fraction, float sizeArgX, float sizeArgY); /*
-        ImGui::ProgressBar(fraction, ImVec2(sizeArgX, sizeArgY));
-    */
-
-    public static native void progressBar(float fraction, float sizeArgX, float sizeArgY, String overlay); /*
-        ImGui::ProgressBar(fraction, ImVec2(sizeArgX, sizeArgY), overlay);
-    */
+    @BindingMethod
+    public static native void ProgressBar(float fraction, @OptArg(callValue = "ImVec2(-FLT_MIN,0)") ImVec2 size, @OptArg String overlay);
 
     /**
      * Draw a small circle + keep the cursor on the same line. advance cursor x position by GetTreeNodeToLabelSpacing(), same distance that TreeNode() uses
      */
-    public static native void bullet(); /*
-        ImGui::Bullet();
-    */
+    @BindingMethod
+    public static native void Bullet();
 
-    // Widgets: Combo Box
+    // Widgets: Images
+    // - Read about ImTextureID here: https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples
+
+    @BindingMethod
+    public static native void Image(@ArgValue(callPrefix = "(ImTextureID)(uintptr_t)") long userTextureId, ImVec2 imageSize, @OptArg ImVec2 uv0, @OptArg ImVec2 uv1, @OptArg ImVec4 tintCol, @OptArg ImVec4 borderCol);
+
+    @BindingMethod
+    public static native boolean ImageButton(String strId, @ArgValue(callPrefix = "(ImTextureID)(uintptr_t)") long userTextureId, ImVec2 imageSize, @OptArg ImVec2 uv0, @OptArg ImVec2 uv1, @OptArg ImVec4 bgCol, @OptArg ImVec4 tintCol);
+
+
+    // Widgets: Combo Box (Dropdown)
     // - The BeginCombo()/EndCombo() api allows you to manage your contents and selection state however you want it, by creating e.g. Selectable() items.
     // - The old Combo() api are helpers over BeginCombo()/EndCombo() which are kept available for convenience purpose.
 
-    public static native boolean beginCombo(String label, String previewValue); /*
-        return ImGui::BeginCombo(label, previewValue);
-     */
-
-    public static native boolean beginCombo(String label, String previewValue, int imGuiComboFlags); /*
-        return ImGui::BeginCombo(label, previewValue, imGuiComboFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginCombo(String label, String previewValue, @OptArg int imGuiComboFlags);
 
     /**
      * Only call EndCombo() if BeginCombo() returns true!
      */
-    public static native void endCombo(); /*
-        ImGui::EndCombo();
-    */
+    @BindingMethod
+    public static native void EndCombo();
 
-    public static boolean combo(String label, ImInt currentItem, String[] items) {
-        return nCombo(label, currentItem.getData(), items, items.length, -1);
-    }
-
-    public static boolean combo(String label, ImInt currentItem, String[] items, int popupMaxHeightInItems) {
-        return nCombo(label, currentItem.getData(), items, items.length, popupMaxHeightInItems);
-    }
-
-    private static native boolean nCombo(String label, int[] currentItem, String[] items, int itemsCount, int popupMaxHeightInItems); /*
-        const char* listboxItems[itemsCount];
-
-        for (int i = 0; i < itemsCount; i++) {
-            jstring string = (jstring)env->GetObjectArrayElement(items, i);
-            const char* rawString = env->GetStringUTFChars(string, JNI_FALSE);
-            listboxItems[i] = rawString;
-        }
-
-        bool flag = ImGui::Combo(label, &currentItem[0], listboxItems, itemsCount, popupMaxHeightInItems);
-
-        for (int i = 0; i< itemsCount; i++) {
-            jstring string = (jstring)env->GetObjectArrayElement(items, i);
-            env->ReleaseStringUTFChars(string, listboxItems[i]);
-        }
-
-        return flag;
-    */
+    @BindingMethod
+    public static native boolean Combo(String label, ImInt currentItem, String[] items, Void itemsCount, @OptArg int popupMaxHeightInItems);
 
     /**
      * Separate items with \0 within a string, end item-list with \0\0. e.g. "One\0Two\0Three\0"
      */
-    public static boolean combo(String label, ImInt currentItem, String itemsSeparatedByZeros) {
-        return nCombo(label, currentItem.getData(), itemsSeparatedByZeros, -1);
-    }
-
-    public static boolean combo(String label, ImInt currentItem, String itemsSeparatedByZeros, int popupMaxHeightInItems) {
-        return nCombo(label, currentItem.getData(), itemsSeparatedByZeros, popupMaxHeightInItems);
-    }
-
-    private static native boolean nCombo(String label, int[] currentItem, String itemsSeparatedByZeros, int popupMaxHeightInItems); /*
-        return ImGui::Combo(label, &currentItem[0], itemsSeparatedByZeros, popupMaxHeightInItems);
-    */
+    @BindingMethod
+    public static native boolean Combo(String label, ImInt currentItem, String itemsSeparatedByZeros, @OptArg int popupMaxHeightInItems);
 
     // Widgets: Drag Sliders
     // - CTRL+Click on any drag box to turn them into an input box. Manually input values aren't clamped and can go off-bounds.
-    // - For all the Float2/Float3/Float4/Int2/Int3/Int4 versions of every functions, note that a 'float v[X]' function argument is the same as 'float* v', the array syntax is just a way to document the number of elements that are expected to be accessible. You can pass address of your first element out of a contiguous set, e.g. &myvector.x
+    // - For all the Float2/Float3/Float4/Int2/Int3/Int4 versions of every function, note that a 'float v[X]' function argument is the same as 'float* v', the array syntax is just a way to document the number of elements that are expected to be accessible. You can pass address of your first element out of a contiguous set, e.g. &myvector.x
     // - Adjust format string to decorate the value with a prefix, a suffix, or adapt the editing and display precision e.g. "%.3f" -> 1.234; "%5.2f secs" -> 01.23 secs; "Biscuit: %.0f" -> Biscuit: 1; etc.
     // - Format string may also be set to NULL or use the default format ("%f" or "%d").
     // - Speed are per-pixel of mouse movement (vSpeed=0.2f: mouse needs to move by 5 pixels to increase value by 1). For gamepad/keyboard navigation, minimum speed is Max(vSpeed, minimum_step_at_given_precision).
@@ -1984,1033 +1163,162 @@ public class ImGui {
     // - Use v_max = FLT_MAX / INT_MAX etc to avoid clamping to a maximum, same with v_min = -FLT_MAX / INT_MIN to avoid clamping to a minimum.
     // - Use vMin > vMax to lock edits.
     // - We use the same sets of flags for DragXXX() and SliderXXX() functions as the features are the same and it makes it easier to swap them.
-    // - Legacy: Pre-1.78 there are DragXXX() function signatures that takes a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
+    // - Legacy: Pre-1.78 there are DragXXX() function signatures that take a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
     //   If you get a warning converting a float to ImGuiSliderFlags, read https://github.com/ocornut/imgui/issues/3361
 
-    public static native boolean dragFloat(String label, float[] v); /*
-        return ImGui::DragFloat(label, &v[0]);
-    */
+    /**
+     * If {@code vMin >= vMax} we have no bound
+     */
+    @BindingMethod
+    public static native boolean DragFloat(String label, float[] v, @OptArg float vSpeed, @OptArg float vMin, @OptArg float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat(String label, float[] v, float vSpeed); /*
-        return ImGui::DragFloat(label, &v[0], vSpeed);
-    */
+    @BindingMethod
+    public static native boolean DragFloat2(String label, float[] v, @OptArg float vSpeed, @OptArg float vMin, @OptArg float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean DragFloat3(String label, float[] v, @OptArg float vSpeed, @OptArg float vMin, @OptArg float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean DragFloat4(String label, float[] v, @OptArg float vSpeed, @OptArg float vMin, @OptArg float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean DragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, @OptArg float vMin, @OptArg float vMax, @OptArg String format, @OptArg String formatMax, @OptArg int imGuiSliderFlags);
 
     /**
      * If {@code vMin >= vMax} we have no bound
      */
-    public static native boolean dragFloat(String label, float[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragFloat(label, &v[0], vSpeed, vMin, vMax);
-    */
+    @BindingMethod
+    public static native boolean DragInt(String label, int[] v, @OptArg float vSpeed, @OptArg int vMin, @OptArg int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
 
-    /**
-     * If {@code vMin >= vMax} we have no bound
-     */
-    public static native boolean dragFloat(String label, float[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragFloat(label, &v[0], vSpeed, vMin, vMax, format);
-    */
+    @BindingMethod
+    public static native boolean DragInt2(String label, int[] v, @OptArg float vSpeed, @OptArg int vMin, @OptArg int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
 
-    /**
-     * If {@code vMin >= vMax} we have no bound
-     */
-    public static native boolean dragFloat(String label, float[] v, float vSpeed, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragFloat(label, &v[0], vSpeed, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
+    @BindingMethod
+    public static native boolean DragInt3(String label, int[] v, @OptArg float vSpeed, @OptArg int vMin, @OptArg int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v); /*
-        return ImGui::DragFloat2(label, v);
-    */
+    @BindingMethod
+    public static native boolean DragInt4(String label, int[] v, @OptArg float vSpeed, @OptArg int vMin, @OptArg int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v, float vSpeed); /*
-        return ImGui::DragFloat2(label, v, vSpeed);
-    */
+    @BindingMethod
+    public static native boolean DragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, @OptArg float vSpeed, @OptArg int vMin, @OptArg int vMax, @OptArg String format, @OptArg String formatMax, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v, float vSpeed, float vMin); /*
-        return ImGui::DragFloat2(label, v, vSpeed, vMin);
-    */
+    @BindingMethod
+    public static native boolean DragScalar(String label, Void ImGuiDataType_S16, short[] pData, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") short pMin, @OptArg @ArgValue(callPrefix = "&") short pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragFloat2(label, v, vSpeed, vMin, vMax);
-    */
+    @BindingMethod
+    public static native boolean DragScalar(String label, Void ImGuiDataType_S32, int[] pData, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") int pMin, @OptArg @ArgValue(callPrefix = "&") int pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragFloat2(label, v, vSpeed, vMin, vMax, format);
-    */
+    @BindingMethod
+    public static native boolean DragScalar(String label, Void ImGuiDataType_S64, long[] pData, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") long pMin, @OptArg @ArgValue(callPrefix = "&") long pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat2(String label, float[] v, float vSpeed, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragFloat2(label, v, vSpeed, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
+    @BindingMethod
+    public static native boolean DragScalar(String label, Void ImGuiDataType_Float, float[] pData, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") float pMin, @OptArg @ArgValue(callPrefix = "&") float pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v); /*
-        return ImGui::DragFloat3(label, v);
-    */
+    @BindingMethod
+    public static native boolean DragScalar(String label, Void ImGuiDataType_Double, double[] pData, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") double pMin, @OptArg @ArgValue(callPrefix = "&") double pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v, float vSpeed); /*
-        return ImGui::DragFloat3(label, v, vSpeed);
-    */
+    @BindingMethod
+    public static native boolean DragScalarN(String label, Void ImGuiDataType_S16, short[] pData, int components, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") short pMin, @OptArg @ArgValue(callPrefix = "&") short pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v, float vSpeed, float vMin); /*
-        return ImGui::DragFloat3(label, v, vSpeed, vMin);
-    */
+    @BindingMethod
+    public static native boolean DragScalarN(String label, Void ImGuiDataType_S32, int[] pData, int components, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") int pMin, @OptArg @ArgValue(callPrefix = "&") int pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragFloat3(label, v, vSpeed, vMin, vMax);
-    */
+    @BindingMethod
+    public static native boolean DragScalarN(String label, Void ImGuiDataType_S64, long[] pData, int components, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") long pMin, @OptArg @ArgValue(callPrefix = "&") long pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragFloat3(label, v, vSpeed, vMin, vMax, format);
-    */
+    @BindingMethod
+    public static native boolean DragScalarN(String label, Void ImGuiDataType_Float, float[] pData, int components, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") float pMin, @OptArg @ArgValue(callPrefix = "&") float pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
-    public static native boolean dragFloat3(String label, float[] v, float vSpeed, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragFloat3(label, v, vSpeed, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v); /*
-        return ImGui::DragFloat4(label, v);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v, float vSpeed); /*
-        return ImGui::DragFloat4(label, v, vSpeed);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v, float vSpeed, float vMin); /*
-        return ImGui::DragFloat4(label, v, vSpeed, vMin);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragFloat4(label, v, vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragFloat4(label, v, vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragFloat4(String label, float[] v, float vSpeed, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragFloat4(label, v, vSpeed, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0]);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, float vMin); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, float vMin, float vMax, String format, String formatMax); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax, format, formatMax);
-    */
-
-    public static native boolean dragFloatRange2(String label, float[] vCurrentMin, float[] vCurrentMax, float vSpeed, float vMin, float vMax, String format, String formatMax, int imGuiSliderFlags); /*
-        return ImGui::DragFloatRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax, format, formatMax, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean dragInt(String label, int[] v); /*
-        return ImGui::DragInt(label, &v[0]);
-    */
-
-    public static native boolean dragInt(String label, int[] v, float vSpeed); /*
-        return ImGui::DragInt(label, &v[0], vSpeed);
-    */
-
-    public static native boolean dragInt(String label, int[] v, float vSpeed, float vMin); /*
-        return ImGui::DragInt(label, &v[0], vSpeed, vMin);
-    */
-
-    /**
-     * If {@code vMin >= vMax} we have no bound
-     */
-    public static native boolean dragInt(String label, int[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragInt(label, &v[0], vSpeed, vMin, vMax);
-    */
-
-    /**
-     * If {@code vMin >= vMax} we have no bound
-     */
-    public static native boolean dragInt(String label, int[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragInt(label, &v[0], vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragInt2(String label, int[] v); /*
-        return ImGui::DragInt2(label, v);
-    */
-
-    public static native boolean dragInt2(String label, int[] v, float vSpeed); /*
-        return ImGui::DragInt2(label, v, vSpeed);
-    */
-
-    public static native boolean dragInt2(String label, int[] v, float vSpeed, float vMin); /*
-        return ImGui::DragInt2(label, v, vSpeed, vMin);
-    */
-
-    public static native boolean dragInt2(String label, int[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragInt2(label, v, vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragInt2(String label, int[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragInt2(label, v, vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragInt3(String label, int[] v); /*
-        return ImGui::DragInt3(label, v);
-    */
-
-    public static native boolean dragInt3(String label, int[] v, float vSpeed); /*
-        return ImGui::DragInt3(label, v, vSpeed);
-    */
-
-    public static native boolean dragInt3(String label, int[] v, float vSpeed, float vMin); /*
-        return ImGui::DragInt3(label, v, vSpeed, vMin);
-    */
-
-    public static native boolean dragInt3(String label, int[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragInt3(label, v, vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragInt3(String label, int[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragInt3(label, v, vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragInt4(String label, int[] v); /*
-        return ImGui::DragInt4(label, v);
-    */
-
-    public static native boolean dragInt4(String label, int[] v, float vSpeed); /*
-        return ImGui::DragInt4(label, v, vSpeed);
-    */
-
-    public static native boolean dragInt4(String label, int[] v, float vSpeed, float vMin); /*
-        return ImGui::DragInt4(label, v, vSpeed, vMin);
-    */
-
-    public static native boolean dragInt4(String label, int[] v, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragInt4(label, v, vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragInt4(String label, int[] v, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragInt4(label, v, vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0]);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, float vSpeed); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, float vSpeed, float vMin); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, float vSpeed, float vMin, float vMax); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, float vSpeed, float vMin, float vMax, String format); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax, format);
-    */
-
-    public static native boolean dragIntRange2(String label, int[] vCurrentMin, int[] vCurrentMax, float vSpeed, float vMin, float vMax, String format, String formatMax); /*
-        return ImGui::DragIntRange2(label, &vCurrentMin[0], &vCurrentMax[0], vSpeed, vMin, vMax, format, formatMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImInt pData, float vSpeed) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, int[] pData, float vSpeed); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImInt pData, float vSpeed, int pMin) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, int[] pData, float vSpeed, int pMin); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImInt pData, float vSpeed, int pMin, int pMax) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, int[] pData, float vSpeed, int pMin, int pMax); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImInt pData, float vSpeed, int pMin, int pMax, String format) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalar(String label, int dataType, ImInt pData, float vSpeed, int pMin, int pMax, String format, int imGuiSliderFlags) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, int[] pData, float vSpeed, int pMin, int pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImFloat pData, float vSpeed) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, float[] pData, float vSpeed); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImFloat pData, float vSpeed, float pMin) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, float[] pData, float vSpeed, float pMin); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImFloat pData, float vSpeed, float pMin, float pMax) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, float[] pData, float vSpeed, float pMin, float pMax); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImFloat pData, float vSpeed, float pMin, float pMax, String format) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalar(String label, int dataType, ImFloat pData, float vSpeed, float pMin, float pMax, String format, int imGuiSliderFlags) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, float[] pData, float vSpeed, float pMin, float pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImDouble pData, float vSpeed) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, double[] pData, float vSpeed); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImDouble pData, float vSpeed, double pMin) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, double[] pData, float vSpeed, double pMin); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImDouble pData, float vSpeed, double pMin, double pMax) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, double[] pData, float vSpeed, double pMin, double pMax); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImDouble pData, float vSpeed, double pMin, double pMax, String format) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalar(String label, int dataType, ImDouble pData, float vSpeed, double pMin, double pMax, String format, int imGuiSliderFlags) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, double[] pData, float vSpeed, double pMin, double pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImLong pData, float vSpeed) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, long[] pData, float vSpeed); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImLong pData, float vSpeed, long pMin) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, long[] pData, float vSpeed, long pMin); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImLong pData, float vSpeed, long pMin, long pMax) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, long[] pData, float vSpeed, long pMin, long pMax); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImLong pData, float vSpeed, long pMin, long pMax, String format) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalar(String label, int dataType, ImLong pData, float vSpeed, long pMin, long pMax, String format, int imGuiSliderFlags) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, long[] pData, float vSpeed, long pMin, long pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImShort pData, float vSpeed) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, short[] pData, float vSpeed); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImShort pData, float vSpeed, short pMin) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, short[] pData, float vSpeed, short pMin); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImShort pData, float vSpeed, short pMin, short pMax) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, short[] pData, float vSpeed, short pMin, short pMax); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalar(String label, int dataType, ImShort pData, float vSpeed, short pMin, short pMax, String format) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalar(String label, int dataType, ImShort pData, float vSpeed, short pMin, short pMax, String format, int imGuiSliderFlags) {
-        return nDragScalar(label, dataType, pData.getData(), vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalar(String label, int dataType, short[] pData, float vSpeed, short pMin, short pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalar(label, dataType, &pData[0], vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImInt pData, int components, float vSpeed) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, int[] pData, int components, float vSpeed); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImInt pData, int components, float vSpeed, int pMin) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, int[] pData, int components, float vSpeed, int pMin); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImInt pData, int components, float vSpeed, int pMin, int pMax) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, int[] pData, int components, float vSpeed, int pMin, int pMax); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImInt pData, int components, float vSpeed, int pMin, int pMax, String format) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalarN(String label, int dataType, ImInt pData, int components, float vSpeed, int pMin, int pMax, String format, int imGuiSliderFlags) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, int[] pData, int components, float vSpeed, int pMin, int pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImFloat pData, int components, float vSpeed) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, float[] pData, int components, float vSpeed); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImFloat pData, int components, float vSpeed, float pMin) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, float[] pData, int components, float vSpeed, float pMin); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImFloat pData, int components, float vSpeed, float pMin, float pMax) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, float[] pData, int components, float vSpeed, float pMin, float pMax); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImFloat pData, int components, float vSpeed, float pMin, float pMax, String format) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalarN(String label, int dataType, ImFloat pData, int components, float vSpeed, float pMin, float pMax, String format, int imGuiSliderFlags) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, float[] pData, int components, float vSpeed, float pMin, float pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImDouble pData, int components, float vSpeed) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, double[] pData, int components, float vSpeed); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImDouble pData, int components, float vSpeed, double pMin) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, double[] pData, int components, float vSpeed, double pMin); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImDouble pData, int components, float vSpeed, double pMin, double pMax) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, double[] pData, int components, float vSpeed, double pMin, double pMax); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImDouble pData, int components, float vSpeed, double pMin, double pMax, String format) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalarN(String label, int dataType, ImDouble pData, int components, float vSpeed, double pMin, double pMax, String format, int imGuiSliderFlags) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, double[] pData, int components, float vSpeed, double pMin, double pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImLong pData, int components, float vSpeed) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, long[] pData, int components, float vSpeed); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImLong pData, int components, float vSpeed, long pMin) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, long[] pData, int components, float vSpeed, long pMin); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImLong pData, int components, float vSpeed, long pMin, long pMax) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, long[] pData, int components, float vSpeed, long pMin, long pMax); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImLong pData, int components, float vSpeed, long pMin, long pMax, String format) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalarN(String label, int dataType, ImLong pData, int components, float vSpeed, long pMin, long pMax, String format, int imGuiSliderFlags) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, long[] pData, int components, float vSpeed, long pMin, long pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImShort pData, int components, float vSpeed) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, short[] pData, int components, float vSpeed); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImShort pData, int components, float vSpeed, short pMin) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, short[] pData, int components, float vSpeed, short pMin); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImShort pData, int components, float vSpeed, short pMin, short pMax) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, short[] pData, int components, float vSpeed, short pMin, short pMax); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax);
-    */
-
-    public static boolean dragScalarN(String label, int dataType, ImShort pData, int components, float vSpeed, short pMin, short pMax, String format) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, 0);
-    }
-
-    public static boolean dragScalarN(String label, int dataType, ImShort pData, int components, float vSpeed, short pMin, short pMax, String format, int imGuiSliderFlags) {
-        return nDragScalarN(label, dataType, pData.getData(), components, vSpeed, pMin, pMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nDragScalarN(String label, int dataType, short[] pData, int components, float vSpeed, short pMin, short pMax, String format, int imGuiSliderFlags); /*
-        return ImGui::DragScalarN(label, dataType, &pData[0], components, vSpeed, &pMin, &pMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
+    @BindingMethod
+    public static native boolean DragScalarN(String label, Void ImGuiDataType_Double, double[] pData, int components, @OptArg float vSpeed, @OptArg @ArgValue(callPrefix = "&") double pMin, @OptArg @ArgValue(callPrefix = "&") double pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
     // Widgets: Regular Sliders
     // - CTRL+Click on any slider to turn them into an input box. Manually input values aren't clamped and can go off-bounds.
     // - Adjust format string to decorate the value with a prefix, a suffix, or adapt the editing and display precision e.g. "%.3f" -> 1.234; "%5.2f secs" -> 01.23 secs; "Biscuit: %.0f" -> Biscuit: 1; etc.
     // - Format string may also be set to NULL or use the default format ("%f" or "%d").
-    // - Legacy: Pre-1.78 there are SliderXXX() function signatures that takes a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
+    // - Legacy: Pre-1.78 there are SliderXXX() function signatures that take a final `float power=1.0f' argument instead of the `ImGuiSliderFlags flags=0' argument.
     //   If you get a warning converting a float to ImGuiSliderFlags, read https://github.com/ocornut/imgui/issues/3361
 
     /**
      * Adjust format to decorate the value with a prefix or a suffix for in-slider labels or unit display.
      */
-    public static native boolean sliderFloat(String label, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderFloat(label, &v[0],vMin, vMax);
-    */
-
-    public static native boolean sliderFloat(String label, float[] v, float vMin, float vMax, String format); /*
-        return ImGui::SliderFloat(label, &v[0], vMin, vMax, format);
-    */
-
-    public static native boolean sliderFloat(String label, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderFloat(label, &v[0], vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean sliderFloat2(String label, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderFloat2(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderFloat2(String label, float[] v, float vMin, float vMax, String format); /*
-        return ImGui::SliderFloat2(label, v, vMin, vMax, format);
-    */
-
-    public static native boolean sliderFloat2(String label, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderFloat2(label, v, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean sliderFloat3(String label, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderFloat3(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderFloat3(String label, float[] v, float vMin, float vMax, String format); /*
-        return ImGui::SliderFloat3(label, v, vMin, vMax, format);
-    */
-
-    public static native boolean sliderFloat3(String label, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderFloat3(label, v, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean sliderFloat4(String label, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderFloat4(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderFloat4(String label, float[] v, float vMin, float vMax, String format); /*
-        return ImGui::SliderFloat4(label, v, vMin, vMax, format);
-    */
-
-    public static native boolean sliderFloat4(String label, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderFloat4(label, v, vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean sliderAngle(String label, float[] vRad); /*
-        return ImGui::SliderAngle(label, &vRad[0]);
-    */
-
-    public static native boolean sliderAngle(String label, float[] vRad, float vDegreesMin); /*
-        return ImGui::SliderAngle(label, &vRad[0], vDegreesMin);
-    */
-
-    public static native boolean sliderAngle(String label, float[] vRad, float vDegreesMin, float vDegreesMax); /*
-        return ImGui::SliderAngle(label, &vRad[0], vDegreesMin, vDegreesMax);
-    */
-
-    public static native boolean sliderAngle(String label, float[] vRad, float vDegreesMin, float vDegreesMax, String format); /*
-        return ImGui::SliderAngle(label, &vRad[0], vDegreesMin, vDegreesMax, format);
-    */
-
-    public static native boolean sliderInt(String label, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderInt(label, &v[0], vMin, vMax);
-    */
-
-    public static native boolean sliderInt(String label, int[] v, int vMin, int vMax, String format); /*
-        return ImGui::SliderInt(label, &v[0], vMin, vMax, format);
-    */
-
-    public static native boolean sliderInt2(String label, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderInt2(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderInt2(String label, int[] v, int vMin, int vMax, String format); /*
-        return ImGui::SliderInt2(label, v, vMin, vMax, format);
-    */
-
-    public static native boolean sliderInt3(String label, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderInt3(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderInt3(String label, int[] v, int vMin, int vMax, String format); /*
-        return ImGui::SliderInt3(label, v, vMin, vMax, format);
-    */
-
-    public static native boolean sliderInt4(String label, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderInt4(label, v, vMin, vMax);
-    */
-
-    public static native boolean sliderInt4(String label, int[] v, int vMin, int vMax, String format); /*
-        return ImGui::SliderInt4(label, v, vMin, vMax, format);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImInt v, int vMin, int vMax) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImInt v, int vMin, int vMax, String format) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalar(String label, int dataType, ImInt v, int vMin, int vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, int[] v, int vMin, int vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImFloat v, float vMin, float vMax) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImFloat v, float vMin, float vMax, String format) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalar(String label, int dataType, ImFloat v, float vMin, float vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImLong v, long vMin, long vMax) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, long[] v, long vMin, long vMax); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImLong v, long vMin, long vMax, String format) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalar(String label, int dataType, ImLong v, long vMin, long vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, long[] v, long vMin, long vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImDouble v, double vMin, double vMax) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, double[] v, double vMin, double vMax); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImDouble v, double vMin, double vMax, String format) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalar(String label, int dataType, ImDouble v, double vMin, double vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, double[] v, double vMin, double vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImShort v, short vMin, short vMax) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, short[] v, short vMin, short vMax); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean sliderScalar(String label, int dataType, ImShort v, short vMin, short vMax, String format) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalar(String label, int dataType, ImShort v, short vMin, short vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalar(label, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalar(String label, int dataType, short[] v, short vMin, short vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalar(label, dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImInt v, int vMin, int vMax) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, int[] v, int vMin, int vMax); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImInt v, int vMin, int vMax, String format) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImInt v, int vMin, int vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, int[] v, int vMin, int vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImFloat v, float vMin, float vMax) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, float[] v, float vMin, float vMax); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImFloat v, float vMin, float vMax, String format) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImFloat v, float vMin, float vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImLong v, long vMin, long vMax) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, long[] v, long vMin, long vMax); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImLong v, long vMin, long vMax, String format) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImLong v, long vMin, long vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, long[] v, long vMin, long vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImDouble v, double vMin, double vMax) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, double[] v, double vMin, double vMax); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImDouble v, double vMin, double vMax, String format) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImDouble v, double vMin, double vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, double[] v, double vMin, double vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImShort v, short vMin, short vMax) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, short[] v, short vMin, short vMax); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax);
-    */
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImShort v, short vMin, short vMax, String format) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean sliderScalarN(String label, int dataType, int components, ImShort v, short vMin, short vMax, String format, int imGuiSliderFlags) {
-        return nSliderScalarN(label, dataType, components, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nSliderScalarN(String label, int dataType, int components, short[] v, short vMin, short vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::SliderScalarN(label, dataType, &v[0], components, &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean vSliderFloat(String label, float sizeX, float sizeY, float[] v, float vMin, float vMax); /*
-        return ImGui::VSliderFloat(label, ImVec2(sizeX, sizeY), &v[0], vMin, vMax);
-    */
-
-    public static native boolean vSliderFloat(String label, float sizeX, float sizeY, float[] v, float vMin, float vMax, String format); /*
-        return ImGui::VSliderFloat(label, ImVec2(sizeX, sizeY), &v[0], vMin, vMax);
-    */
-
-    public static native boolean vSliderFloat(String label, float sizeX, float sizeY, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderFloat(label, ImVec2(sizeX, sizeY), &v[0], vMin, vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static native boolean vSliderInt(String label, float sizeX, float sizeY, int[] v, int vMin, int vMax); /*
-        return ImGui::VSliderInt(label, ImVec2(sizeX, sizeY), &v[0], vMin, vMax);
-    */
-
-    public static native boolean vSliderInt(String label, float sizeX, float sizeY, int[] v, int vMin, int vMax, String format); /*
-        return ImGui::VSliderInt(label, ImVec2(sizeX, sizeY), &v[0], vMin, vMax, format);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImInt v, int vMin, int vMax) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, int[] v, int vMin, int vMax); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImInt v, int vMin, int vMax, String format) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImInt v, int vMin, int vMax, String format, int imGuiSliderFlags) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, int[] v, int vMin, int vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImFloat v, float vMin, float vMax) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, float[] v, float vMin, float vMax); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImFloat v, float vMin, float vMax, String format) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImFloat v, float vMin, float vMax, String format, int imGuiSliderFlags) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, float[] v, float vMin, float vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImLong v, long vMin, long vMax) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, long[] v, long vMin, long vMax); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImLong v, long vMin, long vMax, String format) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImLong v, long vMin, long vMax, String format, int imGuiSliderFlags) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, long[] v, long vMin, long vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImDouble v, double vMin, double vMax) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, double[] v, double vMin, double vMax); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImDouble v, double vMin, double vMax, String format) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImDouble v, double vMin, double vMax, String format, int imGuiSliderFlags) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, double[] v, double vMin, double vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImShort v, short vMin, short vMax) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, short[] v, short vMin, short vMax); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax);
-    */
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImShort v, short vMin, short vMax, String format) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, 0);
-    }
-
-    public static boolean vSliderScalar(String label, float sizeX, float sizeY, int dataType, ImShort v, short vMin, short vMax, String format, int imGuiSliderFlags) {
-        return nVSliderScalar(label, sizeX, sizeY, dataType, v.getData(), vMin, vMax, format, imGuiSliderFlags);
-    }
-
-    private static native boolean nVSliderScalar(String label, float sizeX, float sizeY, int dataType, short[] v, short vMin, short vMax, String format, int imGuiSliderFlags); /*
-        return ImGui::VSliderScalar(label, ImVec2(sizeX, sizeY), dataType, &v[0], &vMin, &vMax, format, (ImGuiSliderFlags)imGuiSliderFlags);
-    */
+    @BindingMethod
+    public static native boolean SliderFloat(String label, float[] v, float vMin, float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderFloat2(String label, float[] v, float vMin, float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderFloat3(String label, float[] v, float vMin, float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderFloat4(String label, float[] v, float vMin, float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderAngle(String label, float[] vRad, @OptArg float vDegreesMin, @OptArg float vDegreesMax, @OptArg(callValue = "\"%.0f deg\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderInt(String label, int[] v, int vMin, int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderInt2(String label, int[] v, int vMin, int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderInt3(String label, int[] v, int vMin, int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderInt4(String label, int[] v, int vMin, int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalar(String label, Void ImGuiDataType_S16, short[] pData, @ArgValue(callPrefix = "&") short pMin, @ArgValue(callPrefix = "&") short pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalar(String label, Void ImGuiDataType_S32, int[] pData, @ArgValue(callPrefix = "&") int pMin, @ArgValue(callPrefix = "&") int pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalar(String label, Void ImGuiDataType_S64, long[] pData, @ArgValue(callPrefix = "&") long pMin, @ArgValue(callPrefix = "&") long pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalar(String label, Void ImGuiDataType_Float, float[] pData, @ArgValue(callPrefix = "&") float pMin, @ArgValue(callPrefix = "&") float pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalar(String label, Void ImGuiDataType_Double, double[] pData, @ArgValue(callPrefix = "&") double pMin, @ArgValue(callPrefix = "&") double pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalarN(String label, Void ImGuiDataType_S16, short[] pData, int components, @ArgValue(callPrefix = "&") short pMin, @ArgValue(callPrefix = "&") short pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalarN(String label, Void ImGuiDataType_S32, int[] pData, int components, @ArgValue(callPrefix = "&") int pMin, @ArgValue(callPrefix = "&") int pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalarN(String label, Void ImGuiDataType_S64, long[] pData, int components, @ArgValue(callPrefix = "&") long pMin, @ArgValue(callPrefix = "&") long pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalarN(String label, Void ImGuiDataType_Float, float[] pData, int components, @ArgValue(callPrefix = "&") float pMin, @ArgValue(callPrefix = "&") float pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean SliderScalarN(String label, Void ImGuiDataType_Double, double[] pData, int components, @ArgValue(callPrefix = "&") double pMin, @ArgValue(callPrefix = "&") double pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderFloat(String label, ImVec2 size, float[] v, float vMin, float vMax, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderInt(String label, ImVec2 size, int[] v, int vMin, int vMax, @OptArg(callValue = "\"%d\"") String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderScalar(String label, ImVec2 size, Void ImGuiDataType_S16, short[] pData, @ArgValue(callPrefix = "&") short pMin, @ArgValue(callPrefix = "&") short pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderScalar(String label, ImVec2 size, Void ImGuiDataType_S32, int[] pData, @ArgValue(callPrefix = "&") int pMin, @ArgValue(callPrefix = "&") int pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderScalar(String label, ImVec2 size, Void ImGuiDataType_S64, long[] pData, @ArgValue(callPrefix = "&") long pMin, @ArgValue(callPrefix = "&") long pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderScalar(String label, ImVec2 size, Void ImGuiDataType_Float, float[] pData, @ArgValue(callPrefix = "&") float pMin, @ArgValue(callPrefix = "&") float pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean VSliderScalar(String label, ImVec2 size, Void ImGuiDataType_Double, double[] pData, @ArgValue(callPrefix = "&") double pMin, @ArgValue(callPrefix = "&") double pMax, @OptArg String format, @OptArg int imGuiSliderFlags);
 
     // Widgets: Input with Keyboard
     // - If you want to use InputText() with std::string or any custom dynamic string type, see misc/cpp/imgui_stdlib.h and comments in imgui_demo.cpp.
@@ -3023,7 +1331,6 @@ public class ImGui {
         jfieldID inputDataSizeID;
         jfieldID inputDataIsDirtyID;
         jfieldID inputDataIsResizedID;
-
 
         struct InputTextCallbackUserData {
             JNIEnv* env;
@@ -3088,86 +1395,108 @@ public class ImGui {
         jInputTextCallbackMID = env->GetMethodID(jCallback, "accept", "(J)V");
     */
 
-    public static boolean inputText(String label, ImString text) {
+    public static boolean inputText(final String label, final ImString text) {
         return preInputText(false, label, null, text);
     }
 
-    public static boolean inputText(String label, ImString text, int imGuiInputTextFlags) {
+    public static boolean inputText(final String label, final ImString text, final int imGuiInputTextFlags) {
         return preInputText(false, label, null, text, 0, 0, imGuiInputTextFlags);
     }
 
-    public static boolean inputText(String label, ImString text, int imGuiInputTextFlags, ImGuiInputTextCallback callback) {
+    public static boolean inputText(final String label, final ImString text, final int imGuiInputTextFlags, final ImGuiInputTextCallback callback) {
         return preInputText(false, label, null, text, 0, 0, imGuiInputTextFlags, callback);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text) {
+    public static boolean inputTextMultiline(final String label, final ImString text) {
         return preInputText(true, label, null, text);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text, float width, float height) {
+    public static boolean inputTextMultiline(final String label, final ImString text, final float width, final float height) {
         return preInputText(true, label, null, text, width, height);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text, int imGuiInputTextFlags) {
+    public static boolean inputTextMultiline(final String label, final ImString text, final int imGuiInputTextFlags) {
         return preInputText(true, label, null, text, 0, 0, imGuiInputTextFlags);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text, int imGuiInputTextFlags, ImGuiInputTextCallback callback) {
+    public static boolean inputTextMultiline(final String label, final ImString text, final int imGuiInputTextFlags, final ImGuiInputTextCallback callback) {
         return preInputText(true, label, null, text, 0, 0, imGuiInputTextFlags, callback);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text, float width, float height, int imGuiInputTextFlags) {
+    public static boolean inputTextMultiline(final String label, final ImString text, final float width, final float height, final int imGuiInputTextFlags) {
         return preInputText(true, label, null, text, width, height, imGuiInputTextFlags);
     }
 
-    public static boolean inputTextMultiline(String label, ImString text, float width, float height, int imGuiInputTextFlags, ImGuiInputTextCallback callback) {
+    public static boolean inputTextMultiline(final String label, final ImString text, final float width, final float height, final int imGuiInputTextFlags, final ImGuiInputTextCallback callback) {
         return preInputText(true, label, null, text, width, height, imGuiInputTextFlags, callback);
     }
 
-    public static boolean inputTextWithHint(String label, String hint, ImString text) {
+    public static boolean inputTextWithHint(final String label, final String hint, final ImString text) {
         return preInputText(false, label, hint, text);
     }
 
-    public static boolean inputTextWithHint(String label, String hint, ImString text, int imGuiInputTextFlags) {
+    public static boolean inputTextWithHint(final String label, final String hint, final ImString text, final int imGuiInputTextFlags) {
         return preInputText(false, label, hint, text, 0, 0, imGuiInputTextFlags);
     }
 
-    public static boolean inputTextWithHint(String label, String hint, ImString text, int imGuiInputTextFlags, ImGuiInputTextCallback callback) {
+    public static boolean inputTextWithHint(final String label, final String hint, final ImString text, final int imGuiInputTextFlags, final ImGuiInputTextCallback callback) {
         return preInputText(false, label, hint, text, 0, 0, imGuiInputTextFlags, callback);
     }
 
-    private static boolean preInputText(boolean multiline, String label, String hint, ImString text) {
+    private static boolean preInputText(final boolean multiline, final String label, final String hint, final ImString text) {
         return preInputText(multiline, label, hint, text, 0, 0);
     }
 
-    private static boolean preInputText(boolean multiline, String label, String hint, ImString text, float width, float height) {
-        return preInputText(multiline, label, hint, text, width, height, ImGuiInputTextFlags.None);
+    private static boolean preInputText(final boolean multiline, final String label, final String hint, final ImString text, final float width, final float height) {
+        return preInputText(multiline, label, hint, text, width, height, 0/*ImGuiInputTextFlags.None*/);
     }
 
-    private static boolean preInputText(boolean multiline, String label, String hint, ImString text, float width, float height, int flags) {
+    private static boolean preInputText(final boolean multiline, final String label, final String hint, final ImString text, final float width, final float height, final int flags) {
         return preInputText(multiline, label, hint, text, width, height, flags, null);
     }
 
-    private static boolean preInputText(boolean multiline, String label, String hint, ImString text, float width, float height, int flags, ImGuiInputTextCallback callback) {
+    private static boolean preInputText(final boolean multiline, final String label, final String hint, final ImString text, final float width, final float height, final int flags, final ImGuiInputTextCallback callback) {
         final ImString.InputData inputData = text.inputData;
-
-        if (inputData.isResizable) {
-            flags |= ImGuiInputTextFlags.CallbackResize;
-        }
-
-        if (!inputData.allowedChars.isEmpty()) {
-            flags |= ImGuiInputTextFlags.CallbackCharFilter;
-        }
 
         String hintLabel = hint;
         if (hintLabel == null) {
             hintLabel = "";
         }
 
-        return nInputText(multiline, hint != null, label, hintLabel, text, text.getData(), text.getData().length, width, height, flags, inputData, inputData.allowedChars, callback);
+        return nInputText(
+            multiline,
+            hint != null,
+            label,
+            hintLabel,
+            text,
+            text.getData(),
+            text.getData().length,
+            width,
+            height,
+            flags,
+            inputData,
+            inputData.allowedChars,
+            inputData.isResizable,
+            callback
+        );
     }
 
-    private static native boolean nInputText(boolean multiline, boolean hint, String label, String hintLabel, ImString imString, byte[] buf, int maxSize, float width, float height, int flags, ImString.InputData textInputData, String allowedChars, ImGuiInputTextCallback callback); /*
+    private static native boolean nInputText(
+        boolean multiline,
+        boolean hint,
+        String label,
+        String hintLabel,
+        ImString imString,
+        byte[] buf,
+        int maxSize,
+        float width,
+        float height,
+        int flagsV,
+        ImString.InputData textInputData,
+        String allowedChars,
+        boolean isResizable,
+        ImGuiInputTextCallback callback
+    ); /*
         InputTextCallbackUserData userData;
         userData.imString = &imString;
         userData.maxSize = maxSize;
@@ -3177,6 +1506,14 @@ public class ImGui {
         userData.env = env;
         userData.allowedChars = allowedChars;
         userData.handler = callback != NULL ? &callback : NULL;
+
+        int flags = flagsV;
+        if (isResizable) {
+            flags |= ImGuiInputTextFlags_CallbackResize;
+        }
+        if (strlen(allowedChars) > 0) {
+            flags |= ImGuiInputTextFlags_CallbackCharFilter;
+        }
 
         bool valueChanged;
 
@@ -3205,754 +1542,190 @@ public class ImGui {
         return valueChanged;
     */
 
-    public static boolean inputFloat(String label, ImFloat v) {
-        return nInputFloat(label, v.getData(), 0, 0, "%.3f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputFloat(String label, ImFloat v, float step) {
-        return nInputFloat(label, v.getData(), step, 0, "%.3f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputFloat(String label, ImFloat v, float step, float stepFast) {
-        return nInputFloat(label, v.getData(), step, stepFast, "%.3f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputFloat(String label, ImFloat v, float step, float stepFast, String format) {
-        return nInputFloat(label, v.getData(), step, stepFast, format, ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputFloat(String label, ImFloat v, float step, float stepFast, String format, int imGuiInputTextFlags) {
-        return nInputFloat(label, v.getData(), step, stepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputFloat(String label, float[] v, float step, float stepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputFloat(label, &v[0], step, stepFast, format, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputFloat2(String label, float[] v); /*
-        return ImGui::InputFloat2(label, v);
-    */
-
-    public static native boolean inputFloat2(String label, float[] v, String format); /*
-        return ImGui::InputFloat2(label, v, format);
-    */
-
-    public static native boolean inputFloat2(String label, float[] v, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputFloat2(label, v, format, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputFloat3(String label, float[] v); /*
-        return ImGui::InputFloat3(label, v);
-    */
-
-    public static native boolean inputFloat3(String label, float[] v, String format); /*
-        return ImGui::InputFloat3(label, v, format);
-    */
-
-    public static native boolean inputFloat3(String label, float[] v, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputFloat3(label, v, format, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputFloat4(String label, float[] v); /*
-        return ImGui::InputFloat4(label, v);
-    */
-
-    public static native boolean inputFloat4(String label, float[] v, String format); /*
-        return ImGui::InputFloat4(label, v, format);
-    */
-
-    public static native boolean inputFloat4(String label, float[] v, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputFloat4(label, v, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputInt(String label, ImInt v) {
-        return nInputInt(label, v.getData(), 1, 100, ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputInt(String label, ImInt v, int step) {
-        return nInputInt(label, v.getData(), step, 100, ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputInt(String label, ImInt v, int step, int stepFast) {
-        return nInputInt(label, v.getData(), step, stepFast, ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputInt(String label, ImInt v, int step, int stepFast, int imGuiInputTextFlags) {
-        return nInputInt(label, v.getData(), step, stepFast, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputInt(String label, int[] v, int step, int stepFast, int imGuiInputTextFlags); /*
-        return ImGui::InputInt(label, &v[0], step, stepFast, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputInt2(String label, int[] v); /*
-        return ImGui::InputInt2(label, v);
-    */
-
-    public static native boolean inputInt2(String label, int[] v, int imGuiInputTextFlags); /*
-        return ImGui::InputInt2(label, v, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputInt3(String label, int[] v); /*
-        return ImGui::InputInt3(label, v);
-    */
-
-    public static native boolean inputInt3(String label, int[] v, int imGuiInputTextFlags); /*
-        return ImGui::InputInt3(label, v, imGuiInputTextFlags);
-    */
-
-    public static native boolean inputInt4(String label, int[] v); /*
-        return ImGui::InputInt4(label, v);
-    */
-
-    public static native boolean inputInt4(String label, int[] v, int imGuiInputTextFlags); /*
-        return ImGui::InputInt4(label, v, imGuiInputTextFlags);
-    */
-
-    public static boolean inputDouble(String label, ImDouble v) {
-        return nInputDouble(label, v.getData(), 0, 0, "%.6f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputDouble(String label, ImDouble v, double step) {
-        return nInputDouble(label, v.getData(), step, 0, "%.6f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputDouble(String label, ImDouble v, double step, double stepFast) {
-        return nInputDouble(label, v.getData(), step, stepFast, "%.6f", ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputDouble(String label, ImDouble v, double step, double stepFast, String format) {
-        return nInputDouble(label, v.getData(), step, stepFast, format, ImGuiInputTextFlags.None);
-    }
-
-    public static boolean inputDouble(String label, ImDouble v, double step, double stepFast, String format, int imGuiInputTextFlags) {
-        return nInputDouble(label, v.getData(), step, stepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputDouble(String label, double[] v, double step, double stepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputDouble(label, &v[0], step, stepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImInt pData) {
-        return nInputScalar(label, dataType, pData.getData());
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, int[] pData); /*
-        return ImGui::InputScalar(label, dataType, &pData[0]);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImInt pData, int pStep) {
-        return nInputScalar(label, dataType, pData.getData(), pStep);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, int[] pData, int pStep); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImInt pData, int pStep, int pStepFast) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, int[] pData, int pStep, int pStepFast); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImInt pData, int pStep, int pStepFast, String format) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, int[] pData, int pStep, int pStepFast, String format); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImInt pData, int pStep, int pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, int[] pData, int pStep, int pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImFloat pData) {
-        return nInputScalar(label, dataType, pData.getData());
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, float[] pData); /*
-        return ImGui::InputScalar(label, dataType, &pData[0]);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImFloat pData, float pStep) {
-        return nInputScalar(label, dataType, pData.getData(), pStep);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, float[] pData, float pStep); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImFloat pData, float pStep, float pStepFast) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, float[] pData, float pStep, float pStepFast); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImFloat pData, float pStep, float pStepFast, String format) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, float[] pData, float pStep, float pStepFast, String format); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImFloat pData, float pStep, float pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, float[] pData, float pStep, float pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImLong pData) {
-        return nInputScalar(label, dataType, pData.getData());
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, long[] pData); /*
-        return ImGui::InputScalar(label, dataType, &pData[0]);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImLong pData, long pStep) {
-        return nInputScalar(label, dataType, pData.getData(), pStep);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, long[] pData, long pStep); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImLong pData, long pStep, long pStepFast) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, long[] pData, long pStep, long pStepFast); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImLong pData, long pStep, long pStepFast, String format) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, long[] pData, long pStep, long pStepFast, String format); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImLong pData, long pStep, long pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, long[] pData, long pStep, long pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImDouble pData) {
-        return nInputScalar(label, dataType, pData.getData());
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, double[] pData); /*
-        return ImGui::InputScalar(label, dataType, &pData[0]);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImDouble pData, double pStep) {
-        return nInputScalar(label, dataType, pData.getData(), pStep);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, double[] pData, double pStep); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImDouble pData, double pStep, double pStepFast) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, double[] pData, double pStep, double pStepFast); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImDouble pData, double pStep, double pStepFast, String format) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, double[] pData, double pStep, double pStepFast, String format); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImDouble pData, double pStep, double pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, double[] pData, double pStep, double pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImShort pData) {
-        return nInputScalar(label, dataType, pData.getData());
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, short[] pData); /*
-        return ImGui::InputScalar(label, dataType, &pData[0]);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImShort pData, short pStep) {
-        return nInputScalar(label, dataType, pData.getData(), pStep);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, short[] pData, short pStep); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImShort pData, short pStep, short pStepFast) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, short[] pData, short pStep, short pStepFast); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImShort pData, short pStep, short pStepFast, String format) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, short[] pData, short pStep, short pStepFast, String format); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalar(String label, int dataType, ImShort pData, short pStep, short pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalar(label, dataType, pData.getData(), pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalar(String label, int dataType, short[] pData, short pStep, short pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalar(label, dataType, &pData[0], &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImInt pData, int components) {
-        return nInputScalarN(label, dataType, pData.getData(), components);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, int[] pData, int components); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImInt pData, int components, int pStep) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, int[] pData, int components, int pStep); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImInt pData, int components, int pStep, int pStepFast) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, int[] pData, int components, int pStep, int pStepFast); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImInt pData, int components, int pStep, int pStepFast, String format) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, int[] pData, int components, int pStep, int pStepFast, String format); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImInt pData, int components, int pStep, int pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, int[] pData, int components, int pStep, int pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImFloat pData, int components) {
-        return nInputScalarN(label, dataType, pData.getData(), components);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, float[] pData, int components); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImFloat pData, int components, float pStep) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, float[] pData, int components, float pStep); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImFloat pData, int components, float pStep, float pStepFast) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, float[] pData, int components, float pStep, float pStepFast); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImFloat pData, int components, float pStep, float pStepFast, String format) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, float[] pData, int components, float pStep, float pStepFast, String format); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImFloat pData, int components, float pStep, float pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, float[] pData, int components, float pStep, float pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImLong pData, int components) {
-        return nInputScalarN(label, dataType, pData.getData(), components);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, long[] pData, int components); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImLong pData, int components, long pStep) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, long[] pData, int components, long pStep); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImLong pData, int components, long pStep, long pStepFast) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, long[] pData, int components, long pStep, long pStepFast); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImLong pData, int components, long pStep, long pStepFast, String format) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, long[] pData, int components, long pStep, long pStepFast, String format); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImLong pData, int components, long pStep, long pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, long[] pData, int components, long pStep, long pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImDouble pData, int components) {
-        return nInputScalarN(label, dataType, pData.getData(), components);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, double[] pData, int components); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImDouble pData, int components, double pStep) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, double[] pData, int components, double pStep); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImDouble pData, int components, double pStep, double pStepFast) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, double[] pData, int components, double pStep, double pStepFast); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImDouble pData, int components, double pStep, double pStepFast, String format) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, double[] pData, int components, double pStep, double pStepFast, String format); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImDouble pData, int components, double pStep, double pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, double[] pData, int components, double pStep, double pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImShort pData, int components) {
-        return nInputScalarN(label, dataType, pData.getData(), components);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, short[] pData, int components); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImShort pData, int components, short pStep) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, short[] pData, int components, short pStep); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImShort pData, int components, short pStep, short pStepFast) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, short[] pData, int components, short pStep, short pStepFast); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImShort pData, int components, short pStep, short pStepFast, String format) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, short[] pData, int components, short pStep, short pStepFast, String format); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format);
-    */
-
-    public static boolean inputScalarN(String label, int dataType, ImShort pData, int components, short pStep, short pStepFast, String format, int imGuiInputTextFlags) {
-        return nInputScalarN(label, dataType, pData.getData(), components, pStep, pStepFast, format, imGuiInputTextFlags);
-    }
-
-    private static native boolean nInputScalarN(String label, int dataType, short[] pData, int components, short pStep, short pStepFast, String format, int imGuiInputTextFlags); /*
-        return ImGui::InputScalarN(label, dataType, &pData[0], components, &pStep, &pStepFast, format, imGuiInputTextFlags);
-    */
+    @BindingMethod
+    public static native boolean InputFloat(String label, ImFloat v, @OptArg float step, @OptArg float stepFast, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputFloat2(String label, float[] v, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputFloat3(String label, float[] v, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputFloat4(String label, float[] v, @OptArg(callValue = "\"%.3f\"") String format, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputInt(String label, ImInt v, @OptArg int step, @OptArg int stepFast, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputInt2(String label, int[] v, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputInt3(String label, int[] v, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputInt4(String label, int[] v, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputDouble(String label, ImDouble v, @OptArg double step, @OptArg double stepFast, @OptArg(callValue = "\"%.6f\"") String format, @OptArg int imGuiInputTextFlags);
+
+    @BindingMethod
+    public static native boolean InputScalar(String label,
+                                             @ArgVariant(name = {"ImGuiDataType_S16", "ImGuiDataType_S32", "ImGuiDataType_S64", "ImGuiDataType_Float", "ImGuiDataType_Double"}) Void __,
+                                             @ArgVariant(type = {"ImShort", "ImInt", "ImLong", "ImFloat", "ImDouble"}) Void pData,
+                                             @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStep,
+                                             @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStepFast,
+                                             @OptArg String format,
+                                             @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean InputScalar(String label,
+                                             int dataType,
+                                             @ArgVariant(type = {"ImShort", "ImInt", "ImLong", "ImFloat", "ImDouble"}) Void pData,
+                                             @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStep,
+                                             @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStepFast,
+                                             @OptArg String format,
+                                             @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean InputScalarN(String label,
+                                              @ArgVariant(name = {"ImGuiDataType_S16", "ImGuiDataType_S32", "ImGuiDataType_S64", "ImGuiDataType_Float", "ImGuiDataType_Double"}) Void __,
+                                              @ArgVariant(type = {"short[]", "int[]", "long[]", "float[]", "double[]"}) Void pData,
+                                              int components,
+                                              @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStep,
+                                              @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStepFast,
+                                              @OptArg String format,
+                                              @OptArg int imGuiSliderFlags);
+
+    @BindingMethod
+    public static native boolean InputScalarN(String label,
+                                              int dataType,
+                                              @ArgVariant(type = {"short[]", "int[]", "long[]", "float[]", "double[]"}) Void pData,
+                                              int components,
+                                              @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStep,
+                                              @ArgVariant(type = {"short", "int", "long", "float", "double"}) @OptArg @ArgValue(callPrefix = "&") Void pStepFast,
+                                              @OptArg String format,
+                                              @OptArg int imGuiSliderFlags);
 
     // Widgets: Color Editor/Picker (tip: the ColorEdit* functions have a little color square that can be left-clicked to open a picker, and right-clicked to open an option menu.)
     // - Note that in C++ a 'float v[X]' function argument is the _same_ as 'float* v', the array syntax is just a way to document the number of elements that are expected to be accessible.
     // - You can pass the address of a first float element out of a contiguous structure, e.g. &myvector.x
 
-    public static native boolean colorEdit3(String label, float[] col); /*
-        return ImGui::ColorEdit3(label, col);
-    */
+    @BindingMethod
+    public static native boolean ColorEdit3(String label, float[] col, @OptArg int imGuiColorEditFlags);
 
-    public static native boolean colorEdit3(String label, float[] col, int imGuiColorEditFlags); /*
-        return ImGui::ColorEdit3(label, col, imGuiColorEditFlags);
-    */
+    @BindingMethod
+    public static native boolean ColorEdit4(String label, float[] col, @OptArg int imGuiColorEditFlags);
 
-    public static native boolean colorEdit4(String label, float[] col); /*
-        return ImGui::ColorEdit4(label, col);
-    */
+    @BindingMethod
+    public static native boolean ColorPicker3(String label, float[] col, @OptArg int imGuiColorEditFlags);
 
-    public static native boolean colorEdit4(String label, float[] col, int imGuiColorEditFlags); /*
-        return ImGui::ColorEdit4(label, col, imGuiColorEditFlags);
-    */
-
-    public static native boolean colorPicker3(String label, float[] col); /*
-        return ImGui::ColorPicker3(label, col);
-    */
-
-    public static native boolean colorPicker3(String label, float[] col, int imGuiColorEditFlags); /*
-        return ImGui::ColorPicker3(label, col, imGuiColorEditFlags);
-    */
-
-    public static native boolean colorPicker4(String label, float[] col); /*
-        return ImGui::ColorPicker4(label, col);
-    */
-
-    public static native boolean colorPicker4(String label, float[] col, int imGuiColorEditFlags); /*
-        return ImGui::ColorPicker4(label, col, imGuiColorEditFlags);
-    */
-
-    public static native boolean colorPicker4(String label, float[] col, int imGuiColorEditFlags, float refCol); /*
-        return ImGui::ColorPicker4(label, col, imGuiColorEditFlags, &refCol);
-    */
+    @BindingMethod
+    public static native boolean ColorPicker4(String label, float[] col, @OptArg(callValue = "0") int imGuiColorEditFlags, @OptArg float[] refCol);
 
     /**
      * Display a colored square/button, hover for details, return true when pressed.
      */
-    public static native boolean colorButton(String descId, float[] col); /*
-        return ImGui::ColorButton(descId, ImVec4(col[0], col[1], col[2], col[3]));
-    */
+    @BindingMethod
+    public static native boolean ColorButton(String descId, ImVec4 col, @OptArg(callValue = "0") int imGuiColorEditFlags, @OptArg ImVec2 size);
 
     /**
      * Display a colored square/button, hover for details, return true when pressed.
+     *
+     * @deprecated use {@link #colorButton(String, ImVec4)} or {@link #colorButton(String, float, float, float, float)} instead
      */
-    public static native boolean colorButton(String descId, float[] col, int imGuiColorEditFlags); /*
-        return ImGui::ColorButton(descId, ImVec4(col[0], col[1], col[2], col[3]), imGuiColorEditFlags);
-    */
-
-    /**
-     * Display a colored square/button, hover for details, return true when pressed.
-     */
-    public static native boolean colorButton(String descId, float[] col, int imGuiColorEditFlags, float width, float height); /*
-        return ImGui::ColorButton(descId, ImVec4(col[0], col[1], col[2], col[3]), imGuiColorEditFlags, ImVec2(width, height));
-    */
+    @Deprecated
+    @BindingMethod
+    public static native boolean ColorButton(String descId, @ArgValue(callValue = "ImVec4(col[0], col[1], col[2], col[3])") float[] col, @OptArg(callValue = "0") int imGuiColorEditFlags, @OptArg ImVec2 size);
 
     /**
      * Initialize current options (generally on application startup) if you want to select a default format,
      * picker type, etc. User will be able to change many settings, unless you pass the _NoOptions flag to your calls.
      */
-    public static native void setColorEditOptions(int imGuiColorEditFlags); /*
-        ImGui::SetColorEditOptions(imGuiColorEditFlags);
-    */
+    @BindingMethod
+    public static native void SetColorEditOptions(int imGuiColorEditFlags);
 
     // Widgets: Trees
     // - TreeNode functions return true when the node is open, in which case you need to also call TreePop() when you are finished displaying the tree node contents.
 
-    public static native boolean treeNode(String label); /*
-        return ImGui::TreeNode(label);
-    */
+    @BindingMethod
+    public static native boolean TreeNode(String label);
 
     /**
      * Helper variation to easily decorelate the id from the displayed string.
      * Read the FAQ about why and how to use ID. to align arbitrary text at the same level as a TreeNode() you can use Bullet().
      */
-    public static native boolean treeNode(String strId, String label); /*
-        return ImGui::TreeNode(strId, label, NULL);
-    */
+    @BindingMethod
+    public static native boolean TreeNode(String strId, String label, Void NULL);
 
-    public static native boolean treeNode(long ptrId, String label); /*
-        return ImGui::TreeNode((void*)ptrId, label, NULL);
-    */
+    @BindingMethod
+    public static native boolean TreeNode(@ArgValue(callPrefix = "(void*)") long ptrId, String label, Void NULL);
 
-    public static native boolean treeNodeEx(String label); /*
-        return ImGui::TreeNodeEx(label);
-    */
+    @BindingMethod
+    public static native boolean TreeNodeEx(String label, @OptArg int flags);
 
-    public static native boolean treeNodeEx(String label, int imGuiTreeNodeFlags); /*
-        return ImGui::TreeNodeEx(label, imGuiTreeNodeFlags);
-    */
+    @BindingMethod
+    public static native boolean TreeNodeEx(String strId, int flags, String label, Void NULL);
 
-    public static native boolean treeNodeEx(String strId, int imGuiTreeNodeFlags, String label); /*
-        return ImGui::TreeNodeEx(strId, imGuiTreeNodeFlags, label, NULL);
-    */
-
-    public static native boolean treeNodeEx(long ptrId, int imGuiTreeNodeFlags, String label); /*
-        return ImGui::TreeNodeEx((void*)ptrId, imGuiTreeNodeFlags, label, NULL);
-    */
+    @BindingMethod
+    public static native boolean TreeNodeEx(@ArgValue(callPrefix = "(void*)") long ptrId, int flags, String label, Void NULL);
 
     /**
-     * ~ Indent()+PushId(). Already called by TreeNode() when returning true, but you can call TreePush/TreePop yourself if desired.
+     * ~ Indent()+PushID(). Already called by TreeNode() when returning true, but you can call TreePush/TreePop yourself if desired.
      */
-    public static native void treePush(); /*
-        ImGui::TreePush();
-    */
-
-    public static native void treePush(String strId); /*
-        ImGui::TreePush(strId);
-    */
-
-    public static native void treePush(long ptrId); /*
-        ImGui::TreePush((void*)ptrId);
-    */
+    @BindingMethod
+    public static native void TreePush(String strId);
 
     /**
-     * ~ Unindent()+PopId()
+     * ~ Indent()+PushID(). Already called by TreeNode() when returning true, but you can call TreePush/TreePop yourself if desired.
      */
-    public static native void treePop(); /*
-        ImGui::TreePop();
-    */
+    @BindingMethod
+    public static native void TreePush(@ArgValue(callPrefix = "(void*)") long ptrId);
+
+    /**
+     * ~ Unindent()+PopID()
+     */
+    @BindingMethod
+    public static native void TreePop();
 
     /**
      * Horizontal distance preceding label when using TreeNode*() or Bullet() == (g.FontSize + style.FramePadding.x*2) for a regular unframed TreeNode
      */
-    public static native float getTreeNodeToLabelSpacing(); /*
-        return ImGui::GetTreeNodeToLabelSpacing();
-    */
+    @BindingMethod
+    public static native float GetTreeNodeToLabelSpacing();
 
     /**
      * If returning 'true' the header is open. doesn't indent nor push on ID stack. user doesn't have to call TreePop().
      */
-    public static native boolean collapsingHeader(String label); /*
-        return ImGui::CollapsingHeader(label);
-    */
+    @BindingMethod
+    public static native boolean CollapsingHeader(String label, @OptArg int imGuiTreeNodeFlags);
 
     /**
-     * If returning 'true' the header is open. doesn't indent nor push on ID stack. user doesn't have to call TreePop().
+     * When 'p_visible != NULL': if '*p_visible==true' display an additional small close button on upper right of the header which will set the bool
+     * to false when clicked, if '*p_visible==false' don't display the header.
      */
-    public static native boolean collapsingHeader(String label, int imGuiTreeNodeFlags); /*
-        return ImGui::CollapsingHeader(label, imGuiTreeNodeFlags);
-    */
-
-    /**
-     * When 'pVisible' isn't NULL, display an additional small close button on upper right of the header
-     * which will set the bool to false when clicked, if '*pVisible==false' don't display the header.
-     */
-    public static boolean collapsingHeader(String label, ImBoolean pVisible) {
-        return nCollapsingHeader(label, pVisible.getData(), 0);
-    }
-
-    /**
-     * When 'pVisible' isn't NULL, display an additional small close button on upper right of the header
-     * which will set the bool to false when clicked, if '*pVisible==false' don't display the header.
-     */
-    public static boolean collapsingHeader(String label, ImBoolean pVisible, int imGuiTreeNodeFlags) {
-        return nCollapsingHeader(label, pVisible.getData(), imGuiTreeNodeFlags);
-    }
-
-    private static native boolean nCollapsingHeader(String label, boolean[] pVisible, int imGuiTreeNodeFlags); /*
-        return ImGui::CollapsingHeader(label, &pVisible[0], imGuiTreeNodeFlags);
-    */
+    @BindingMethod
+    public static native boolean CollapsingHeader(String label, ImBoolean pVisible, @OptArg int imGuiTreeNodeFlags);
 
     /**
      * Set next TreeNode/CollapsingHeader open state.
      */
-    public static native void setNextItemOpen(boolean isOpen); /*
-        ImGui::SetNextItemOpen(isOpen);
-    */
-
-    /**
-     * Set next TreeNode/CollapsingHeader open state.
-     */
-    public static native void setNextItemOpen(boolean isOpen, int cond); /*
-        ImGui::SetNextItemOpen(isOpen, cond);
-    */
+    @BindingMethod
+    public static native void SetNextItemOpen(boolean isOpen, @OptArg int cond);
 
     // Widgets: Selectables
     // - A selectable highlights when hovered, and can display another color when selected.
     // - Neighbors selectable extend their highlight bounds in order to leave no gap between them.
 
-    public static native boolean selectable(String label); /*
-        return ImGui::Selectable(label);
-    */
+    @BindingMethod
+    public static native boolean Selectable(String label, @OptArg(callValue = "false") boolean selected, @OptArg(callValue = "0") int imGuiSelectableFlags, @OptArg ImVec2 size);
 
-    public static native boolean selectable(String label, boolean selected); /*
-        return ImGui::Selectable(label, selected);
-    */
-
-    public static native boolean selectable(String label, boolean selected, int imGuiSelectableFlags); /*
-        return ImGui::Selectable(label, selected, imGuiSelectableFlags);
-    */
-
-    public static native boolean selectable(String label, boolean selected, int imGuiSelectableFlags, float sizeX, float sizeY); /*
-        return ImGui::Selectable(label, selected, imGuiSelectableFlags, ImVec2(sizeX, sizeY));
-    */
-
-    public static boolean selectable(String label, ImBoolean selected) {
-        return nSelectable(label, selected.getData(), 0, 0, 0);
-    }
-
-    public static boolean selectable(String label, ImBoolean selected, int imGuiSelectableFlags) {
-        return nSelectable(label, selected.getData(), imGuiSelectableFlags, 0, 0);
-    }
-
-    public static boolean selectable(String label, ImBoolean selected, int imGuiSelectableFlags, float sizeX, float sizeY) {
-        return nSelectable(label, selected.getData(), imGuiSelectableFlags, sizeX, sizeY);
-    }
-
-    private static native boolean nSelectable(String label, boolean[] selected, int imGuiSelectableFlags, float sizeX, float sizeY); /*
-        return ImGui::Selectable(label,  &selected[0], imGuiSelectableFlags, ImVec2(sizeX, sizeY));
-    */
+    @BindingMethod
+    public static native boolean Selectable(String label, ImBoolean pSelected, @OptArg(callValue = "0") int imGuiSelectableFlags, @OptArg ImVec2 size);
 
     // Widgets: List Boxes
-    // - This is essentially a thin wrapper to using BeginChild/EndChild with some stylistic changes.
-    // - The BeginListBox()/EndListBox() api allows you to manage your contents and selection state however you want it, by creating e.g. Selectable() or any items.
+    // - This is essentially a thin wrapper to using BeginChild/EndChild with the ImGuiChildFlags_FrameStyle flag for stylistic changes + displaying a label.
+    // - You can submit contents and manage your selection state however you want it, by creating e.g. Selectable() or any other items.
     // - The simplified/old ListBox() api are helpers over BeginListBox()/EndListBox() which are kept available for convenience purpose. This is analoguous to how Combos are created.
     // - Choose frame width:   size.x > 0.0f: custom  /  size.x < 0.0f or -FLT_MIN: right-align   /  size.x = 0.0f (default): use current ItemWidth
     // - Choose frame height:  size.y > 0.0f: custom  /  size.y < 0.0f or -FLT_MIN: bottom-align  /  size.y = 0.0f (default): arbitrary default height which can fit ~7 items
@@ -3960,131 +1733,40 @@ public class ImGui {
     /**
      * Open a framed scrolling region.
      */
-    public static native boolean beginListBox(String label); /*
-        return ImGui::BeginListBox(label);
-    */
-
-    /**
-     * Open a framed scrolling region.
-     */
-    public static native boolean beginListBox(String label, float sizeX, float sizeY); /*
-        return ImGui::BeginListBox(label, ImVec2(sizeX, sizeY));
-    */
+    @BindingMethod
+    public static native boolean BeginListBox(String label, @OptArg ImVec2 size);
 
     /**
      * Only call EndListBox() if BeginListBox() returned true!
      */
-    public static native void endListBox(); /*
-        ImGui::EndListBox();
-    */
+    @BindingMethod
+    public static native void EndListBox();
 
-    public static void listBox(String label, ImInt currentItem, String[] items) {
-        nListBox(label, currentItem.getData(), items, items.length, -1);
-    }
-
-    public static void listBox(String label, ImInt currentItem, String[] items, int heightInItems) {
-        nListBox(label, currentItem.getData(), items, items.length, heightInItems);
-    }
-
-    private static native boolean nListBox(String label, int[] currentItem, String[] items, int itemsCount, int heightInItems); /*
-        const char* listboxItems[itemsCount];
-
-        for (int i = 0; i < itemsCount; i++) {
-            jstring string = (jstring)env->GetObjectArrayElement(items, i);
-            const char* rawString = env->GetStringUTFChars(string, JNI_FALSE);
-            listboxItems[i] = rawString;
-        }
-
-        bool flag = ImGui::ListBox(label, &currentItem[0], listboxItems, itemsCount, heightInItems);
-
-        for (int i = 0; i< itemsCount; i++) {
-            jstring string = (jstring)env->GetObjectArrayElement(items, i);
-            env->ReleaseStringUTFChars(string, listboxItems[i]);
-        }
-
-        return flag;
-    */
+    @BindingMethod
+    public static native void ListBox(String label, ImInt currentItem, String[] items, Void itemsCount, @OptArg int heightInItems);
 
     // Widgets: Data Plotting
     // - Consider using ImPlot (https://github.com/epezent/implot)
 
-    public static native void plotLines(String label, float[] values, int valuesCount); /*
-        ImGui::PlotLines(label, &values[0], valuesCount);
-    */
+    @BindingMethod
+    public static native void PlotLines(String label, float[] values, int valuesCount, @OptArg(callValue = "0") int valuesOffset, @OptArg(callValue = "NULL") String overlayText, @OptArg float scaleMin, @OptArg float scaleMax, @OptArg(callValue = "ImVec2(0,0)") ImVec2 graphSize, @OptArg int stride);
 
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset);
-    */
-
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset, String overlayText); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset, overlayText);
-    */
-
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin);
-    */
-
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax);
-    */
-
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax, float graphWidth, float graphHeight); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax, ImVec2(graphWidth, graphHeight));
-    */
-
-    public static native void plotLines(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax, float graphWidth, float graphHeight, int stride); /*
-        ImGui::PlotLines(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax, ImVec2(graphWidth, graphHeight), stride);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset, String overlayText); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset, overlayText);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax);
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax, float graphWidth, float graphHeight); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax, ImVec2(graphWidth, graphHeight));
-    */
-
-    public static native void plotHistogram(String label, float[] values, int valuesCount, int valuesOffset, String overlayText, float scaleMin, float scaleMax, float graphWidth, float graphHeight, int stride); /*
-        ImGui::PlotHistogram(label, &values[0], valuesCount, valuesOffset, overlayText, scaleMin, scaleMax, ImVec2(graphWidth, graphHeight), stride);
-    */
+    @BindingMethod
+    public static native void PlotHistogram(String label, float[] values, int valuesCount, @OptArg(callValue = "0") int valuesOffset, @OptArg(callValue = "NULL") String overlayText, @OptArg float scaleMin, @OptArg float scaleMax, @OptArg(callValue = "ImVec2(0,0)") ImVec2 graphSize, @OptArg int stride);
 
     // Widgets: Value() Helpers.
     // - Those are merely shortcut to calling Text() with a format string. Output single value in "name: value" format (tip: freely declare more in your code to handle your types. you can add functions to the ImGui namespace)
 
-    public static native void value(String prefix, boolean b); /*
-        ImGui::Value(prefix, b);
-    */
+    public static void value(final String prefix, final Number value) {
+        nValue(prefix, value.toString());
+    }
 
-    public static native void value(String prefix, int v); /*
-        ImGui::Value(prefix, (int)v);
-    */
+    public static void value(final String prefix, final float value, String floatFormat) {
+        nValue(prefix, String.format(floatFormat, value));
+    }
 
-    public static native void value(String prefix, long v); /*
-        ImGui::Value(prefix, (unsigned int)v);
-    */
-
-    public static native void value(String prefix, float f); /*
-        ImGui::Value(prefix, f);
-    */
-
-    public static native void value(String prefix, float f, String floatFormat); /*
-        ImGui::Value(prefix, f, floatFormat);
+    private static native void nValue(String prefix, String value); /*
+        ImGui::Value(prefix, value);
     */
 
     // Widgets: Menus
@@ -4095,152 +1777,96 @@ public class ImGui {
     /**
      * Append to menu-bar of current window (requires ImGuiWindowFlags_MenuBar flag set on parent window).
      */
-    public static native boolean beginMenuBar(); /*
-        return ImGui::BeginMenuBar();
-    */
+    @BindingMethod
+    public static native boolean BeginMenuBar();
 
     /**
      * Only call EndMenuBar() if BeginMenuBar() returns true!
      */
-    public static native void endMenuBar(); /*
-        ImGui::EndMenuBar();
-    */
+    @BindingMethod
+    public static native void EndMenuBar();
 
     /**
      * Create and append to a full screen menu-bar.
      */
-    public static native boolean beginMainMenuBar(); /*
-        return ImGui::BeginMainMenuBar();
-    */
+    @BindingMethod
+    public static native boolean BeginMainMenuBar();
 
     /**
      * Only call EndMainMenuBar() if BeginMainMenuBar() returns true!
      */
-    public static native void endMainMenuBar(); /*
-        ImGui::EndMainMenuBar();
-    */
+    @BindingMethod
+    public static native void EndMainMenuBar();
 
     /**
      * Create a sub-menu entry. only call EndMenu() if this returns true!
      */
-    public static native boolean beginMenu(String label); /*
-        return ImGui::BeginMenu(label);
-    */
-
-    /**
-     * Create a sub-menu entry. only call EndMenu() if this returns true!
-     */
-    public static native boolean beginMenu(String label, boolean enabled); /*
-        return ImGui::BeginMenu(label, enabled);
-    */
+    @BindingMethod
+    public static native boolean BeginMenu(String label, @OptArg boolean enabled);
 
     /**
      * Only call EndMenu() if BeginMenu() returns true!
      */
-    public static native void endMenu(); /*
-        ImGui::EndMenu();
-    */
+    @BindingMethod
+    public static native void EndMenu();
 
     /**
      * Return true when activated. shortcuts are displayed for convenience but not processed by ImGui at the moment
      */
-    public static native boolean menuItem(String label); /*
-        return ImGui::MenuItem(label);
-    */
+    @BindingMethod
+    public static native boolean MenuItem(String label, Void NULL, @OptArg boolean selected, @OptArg boolean enabled);
 
     /**
      * Return true when activated. shortcuts are displayed for convenience but not processed by ImGui at the moment
      */
-    public static boolean menuItem(String label, String shortcut) {
-        return nMenuItem(label, shortcut, false, true);
-    }
-
-    /**
-     * Return true when activated. shortcuts are displayed for convenience but not processed by ImGui at the moment
-     */
-    public static boolean menuItem(String label, String shortcut, boolean selected) {
-        return nMenuItem(label, shortcut, selected, true);
-    }
-
-    /**
-     * Return true when activated. shortcuts are displayed for convenience but not processed by ImGui at the moment
-     */
-    public static boolean menuItem(String label, String shortcut, boolean selected, boolean enabled) {
-        return nMenuItem(label, shortcut, selected, enabled);
-    }
+    @BindingMethod
+    public static native boolean MenuItem(String label, String shortcut, @OptArg boolean selected, @OptArg boolean enabled);
 
     /**
      * Return true when activated + toggle (*pSelected) if pSelected != NULL
      */
-    public static boolean menuItem(String label, String shortcut, ImBoolean pSelected) {
-        return nMenuItem(label, shortcut, pSelected.getData(), true);
-    }
-
-    /**
-     * Return true when activated + toggle (*pSelected) if pSelected != NULL
-     */
-    public static boolean menuItem(String label, String shortcut, ImBoolean pSelected, boolean enabled) {
-        return nMenuItem(label, shortcut, pSelected.getData(), enabled);
-    }
-
-    /**
-     * Return true when activated
-     */
-    private static native boolean nMenuItem(String labelObj, String shortcutObj, boolean selected, boolean enabled); /*MANUAL
-        char* label = (char*)env->GetStringUTFChars(labelObj, JNI_FALSE);
-        char* shortcut = NULL;
-        if (shortcutObj != NULL)
-            shortcut = (char*)env->GetStringUTFChars(shortcutObj, JNI_FALSE);
-
-        jboolean result = ImGui::MenuItem(label, shortcut, selected, enabled);
-
-        if (shortcutObj != NULL)
-            env->ReleaseStringUTFChars(shortcutObj, shortcut);
-        env->ReleaseStringUTFChars(labelObj, label);
-
-        return result;
-    */
-
-    /**
-     * Return true when activated + toggle (*pSelected) if pSelected != NULL
-     */
-    private static native boolean nMenuItem(String labelObj, String shortcutObj, boolean[] pSelectedObj, boolean enabled); /*MANUAL
-        char* label = (char*)env->GetStringUTFChars(labelObj, JNI_FALSE);
-        char* shortcut = NULL;
-        if (shortcutObj != NULL)
-            shortcut = (char*)env->GetStringUTFChars(shortcutObj, JNI_FALSE);
-        bool* pSelected = (bool*)env->GetPrimitiveArrayCritical(pSelectedObj, JNI_FALSE);
-
-        jboolean result = ImGui::MenuItem(label, shortcut, &pSelected[0], enabled);
-
-        env->ReleasePrimitiveArrayCritical(pSelectedObj, pSelected, 0);
-        if (shortcutObj != NULL)
-            env->ReleaseStringUTFChars(shortcutObj, shortcut);
-        env->ReleaseStringUTFChars(labelObj, label);
-
-        return result;
-    */
+    @BindingMethod
+    public static native boolean MenuItem(String label, String shortcut, ImBoolean pSelected, @OptArg boolean enabled);
 
     // Tooltips
-    // - Tooltip are windows following the mouse. They do not take focus away.
+    // - Tooltips are windows following the mouse. They do not take focus away.
+    // - A tooltip window can contain items of any types.
+    // - SetTooltip() is more or less a shortcut for the 'if (BeginTooltip()) { Text(...); EndTooltip(); }' idiom (with a subtlety that it discard any previously submitted tooltip)
 
     /**
-     * Begin/append a tooltip window. to create full-featured tooltip (with any kind of items).
+     * Begin/append a tooltip window.
      */
-    public static native void beginTooltip(); /*
-        ImGui::BeginTooltip();
-    */
-
-    public static native void endTooltip(); /*
-        ImGui::EndTooltip();
-    */
+    @BindingMethod
+    public static native void BeginTooltip();
 
     /**
-     * Set a text-only tooltip, typically use with ImGui::IsItemHovered(). override any previous call to SetTooltip().
+     * Only call EndTooltip() if BeginTooltip()/BeginItemTooltip() returns true!
      */
-    public static native void setTooltip(String text); /*
-        ImGui::SetTooltip(text, NULL);
-    */
+    @BindingMethod
+    public static native void EndTooltip();
+
+    /**
+     * Set a text-only tooltip. Often used after a ImGui::IsItemHovered() check. Override any previous call to SetTooltip().
+     */
+    @BindingMethod
+    public static native void SetTooltip(String text, Void NULL);
+
+    // Tooltips: helpers for showing a tooltip when hovering an item
+    // - BeginItemTooltip() is a shortcut for the 'if (IsItemHovered(ImGuiHoveredFlags_Tooltip) && BeginTooltip())' idiom.
+    // - SetItemTooltip() is a shortcut for the 'if (IsItemHovered(ImGuiHoveredFlags_Tooltip)) { SetTooltip(...); }' idiom.
+    // - Where 'ImGuiHoveredFlags_Tooltip' itself is a shortcut to use 'style.HoverFlagsForTooltipMouse' or 'style.HoverFlagsForTooltipNav' depending on active input type. For mouse it defaults to 'ImGuiHoveredFlags_Stationary | ImGuiHoveredFlags_DelayShort'.
+
+    /**
+     * Begin/append a tooltip window if preceding item was hovered.
+     */
+    @BindingMethod
+    public static native boolean BeginItemTooltip();
+
+    /**
+     * Set a text-only tooltip if preceding item was hovered. override any previous call to SetTooltip().
+     */
+    @BindingMethod
+    public static native void SetItemTooltip(String text, Void NULL);
 
     // Popups, Modals
     //  - They block normal mouse hovering detection (and therefore most mouse interactions) behind them.
@@ -4250,66 +1876,26 @@ public class ImGui {
     //  - You can bypass the hovering restriction by using ImGuiHoveredFlags_AllowWhenBlockedByPopup when calling IsItemHovered() or IsWindowHovered().
     //  - IMPORTANT: Popup identifiers are relative to the current ID stack, so OpenPopup and BeginPopup generally needs to be at the same level of the stack.
     //    This is sometimes leading to confusing mistakes. May rework this in the future.
-    // Popups: begin/end functions
-    //  - BeginPopup(): query popup state, if open start appending into the window. Call EndPopup() afterwards. ImGuiWindowFlags are forwarded to the window.
-    //  - BeginPopupModal(): block every interactions behind the window, cannot be closed by user, add a dimming background, has a title bar.
+    //  - BeginPopup(): query popup state, if open start appending into the window. Call EndPopup() afterwards if returned true. ImGuiWindowFlags are forwarded to the window.
+    //  - BeginPopupModal(): block every interaction behind the window, cannot be closed by user, add a dimming background, has a title bar.
 
     /**
      * Return true if the popup is open, and you can start outputting to it.
      */
-    public static native boolean beginPopup(String strId); /*
-        return ImGui::BeginPopup(strId);
-    */
+    @BindingMethod
+    public static native boolean BeginPopup(String strId, @OptArg int imGuiWindowFlags);
 
     /**
      * Return true if the popup is open, and you can start outputting to it.
      */
-    public static native boolean beginPopup(String strId, int imGuiWindowFlags); /*
-        return ImGui::BeginPopup(strId, imGuiWindowFlags);
-    */
-
-    /**
-     * Return true if the popup is open, and you can start outputting to it.
-     */
-    public static native boolean beginPopupModal(String name); /*
-        return ImGui::BeginPopupModal(name);
-    */
-
-    /**
-     * Return true if the popup is open, and you can start outputting to it.
-     */
-    public static boolean beginPopupModal(String name, ImBoolean pOpen) {
-        return nBeginPopupModal(name, pOpen.getData(), 0);
-    }
-
-    /**
-     * Return true if the popup is open, and you can start outputting to it.
-     */
-    public static boolean beginPopupModal(String name, int imGuiWindowFlags) {
-        return nBeginPopupModal(name, imGuiWindowFlags);
-    }
-
-    /**
-     * Return true if the popup is open, and you can start outputting to it.
-     */
-    public static boolean beginPopupModal(String name, ImBoolean pOpen, int imGuiWindowFlags) {
-        return nBeginPopupModal(name, pOpen.getData(), imGuiWindowFlags);
-    }
-
-    private static native boolean nBeginPopupModal(String name, int imGuiWindowFlags); /*
-        return ImGui::BeginPopupModal(name, NULL, imGuiWindowFlags);
-    */
-
-    private static native boolean nBeginPopupModal(String name, boolean[] pOpen, int imGuiWindowFlags); /*
-        return ImGui::BeginPopupModal(name, &pOpen[0], imGuiWindowFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginPopupModal(String name, @OptArg(callValue = "NULL") ImBoolean pOpen, @OptArg int imGuiWindowFlags);
 
     /**
      * Only call EndPopup() if BeginPopupXXX() returns true!
      */
-    public static native void endPopup(); /*
-        ImGui::EndPopup();
-    */
+    @BindingMethod
+    public static native void EndPopup();
 
     // Popups: open/close functions
     //  - OpenPopup(): set popup state to open. ImGuiPopupFlags are available for opening options.
@@ -4321,51 +1907,26 @@ public class ImGui {
     /**
      * Call to mark popup as open (don't call every frame!).
      */
-    public static native void openPopup(String strId); /*
-        ImGui::OpenPopup(strId);
-    */
+    @BindingMethod
+    public static native void OpenPopup(String strId, @OptArg int imGuiPopupFlags);
 
     /**
-     * Call to mark popup as open (don't call every frame!).
+     * Id overload to facilitate calling from nested stacks.
      */
-    public static native void openPopup(String strId, int imGuiPopupFlags); /*
-        ImGui::OpenPopup(strId, imGuiPopupFlags);
-    */
-
-    /**
-     * Helper to open popup when clicked on last item. return true when just opened. (note: actually triggers on the mouse _released_ event to be consistent with popup behaviors)
-     */
-    public static native void openPopupOnItemClick(); /*
-        ImGui::OpenPopupOnItemClick();
-    */
+    @BindingMethod
+    public static native void OpenPopup(@ArgValue(callPrefix = "(ImGuiID)") int id, @OptArg int imGuiPopupFlags);
 
     /**
      * Helper to open popup when clicked on last item. return true when just opened. (note: actually triggers on the mouse _released_ event to be consistent with popup behaviors)
      */
-    public static native void openPopupOnItemClick(String strId); /*
-        ImGui::OpenPopupOnItemClick(strId);
-    */
-
-    /**
-     * Helper to open popup when clicked on last item. return true when just opened. (note: actually triggers on the mouse _released_ event to be consistent with popup behaviors)
-     */
-    public static native void openPopupOnItemClick(int imGuiPopupFlags); /*
-        ImGui::OpenPopupOnItemClick(NULL, imGuiPopupFlags);
-    */
-
-    /**
-     * Helper to open popup when clicked on last item. return true when just opened. (note: actually triggers on the mouse _released_ event to be consistent with popup behaviors)
-     */
-    public static native void openPopupOnItemClick(String strId, int imGuiPopupFlags); /*
-        ImGui::OpenPopupOnItemClick(strId, imGuiPopupFlags);
-    */
+    @BindingMethod
+    public static native void OpenPopupOnItemClick(@OptArg(callValue = "NULL") String strId, @OptArg int imGuiPopupFlags);
 
     /**
      * Manually close the popup we have begin-ed into.
      */
-    public static native void closeCurrentPopup(); /*
-        ImGui::CloseCurrentPopup();
-    */
+    @BindingMethod
+    public static native void CloseCurrentPopup();
 
     // Popups: open+begin combined functions helpers
     //  - Helpers to do OpenPopup+BeginPopup where the Open action is triggered by e.g. hovering an item and right-clicking.
@@ -4377,89 +1938,20 @@ public class ImGui {
      * Open+begin popup when clicked on last item. if you can pass a NULL str_id only if the previous item had an id.
      * If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
      */
-    public static native boolean beginPopupContextItem(); /*
-        return ImGui::BeginPopupContextItem();
-    */
-
-    /**
-     * Open+begin popup when clicked on last item. if you can pass a NULL str_id only if the previous item had an id.
-     * If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
-     */
-    public static native boolean beginPopupContextItem(String strId); /*
-        return ImGui::BeginPopupContextItem(strId);
-    */
-
-    /**
-     * Open+begin popup when clicked on last item. if you can pass a NULL str_id only if the previous item had an id.
-     * If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
-     */
-    public static native boolean beginPopupContextItem(int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextItem(NULL, imGuiPopupFlags);
-    */
-
-    /**
-     * Open+begin popup when clicked on last item. if you can pass a NULL str_id only if the previous item had an id.
-     * If you want to use that on a non-interactive item such as Text() you need to pass in an explicit ID here. read comments in .cpp!
-     */
-    public static native boolean beginPopupContextItem(String strId, int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextItem(strId, imGuiPopupFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginPopupContextItem(@OptArg(callValue = "NULL") String strId, @OptArg int imGuiPopupFlags);
 
     /**
      * Open+begin popup when clicked on current window.
      */
-    public static native boolean beginPopupContextWindow(); /*
-        return ImGui::BeginPopupContextWindow();
-    */
-
-    /**
-     * Open+begin popup when clicked on current window.
-     */
-    public static native boolean beginPopupContextWindow(String strId); /*
-        return ImGui::BeginPopupContextWindow(strId);
-    */
-
-    /**
-     * Open+begin popup when clicked on current window.
-     */
-    public static native boolean beginPopupContextWindow(int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextWindow(NULL, imGuiPopupFlags);
-    */
-
-    /**
-     * Open+begin popup when clicked on current window.
-     */
-    public static native boolean beginPopupContextWindow(String strId, int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextWindow(strId, imGuiPopupFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginPopupContextWindow(@OptArg(callValue = "NULL") String strId, @OptArg int imGuiPopupFlags);
 
     /**
      * Open+begin popup when clicked in void (where there are no windows).
      */
-    public static native boolean beginPopupContextVoid(); /*
-        return ImGui::BeginPopupContextVoid();
-     */
-
-    /**
-     * Open+begin popup when clicked in void (where there are no windows).
-     */
-    public static native boolean beginPopupContextVoid(String strId); /*
-        return ImGui::BeginPopupContextVoid(strId);
-    */
-
-    /**
-     * Open+begin popup when clicked in void (where there are no windows).
-     */
-    public static native boolean beginPopupContextVoid(int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextVoid(NULL, imGuiPopupFlags);
-    */
-
-    /**
-     * Open+begin popup when clicked in void (where there are no windows).
-     */
-    public static native boolean beginPopupContextVoid(String strId, int imGuiPopupFlags); /*
-        return ImGui::BeginPopupContextVoid(strId, imGuiPopupFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginPopupContextVoid(@OptArg(callValue = "NULL") String strId, @OptArg int imGuiPopupFlags);
 
     // Popups: test function
     //  - IsPopupOpen(): return true if the popup is open at the current BeginPopup() level of the popup stack.
@@ -4469,100 +1961,57 @@ public class ImGui {
     /**
      * Return true if the popup is open.
      */
-    public static native boolean isPopupOpen(String strId); /*
-        return ImGui::IsPopupOpen(strId);
-    */
-
-    /**
-     * Return true if the popup is open.
-     */
-    public static native boolean isPopupOpen(String strId, int imGuiPopupFlags); /*
-        return ImGui::IsPopupOpen(strId, imGuiPopupFlags);
-    */
+    @BindingMethod
+    public static native boolean IsPopupOpen(String strId, @OptArg int imGuiPopupFlags);
 
     // Tables
-    // [BETA API] API may evolve slightly! If you use this, please update to the next version when it comes out!
     // - Full-featured replacement for old Columns API.
-    // - See Demo->Tables for demo code.
-    // - See top of imgui_tables.cpp for general commentary.
+    // - See Demo->Tables for demo code. See top of imgui_tables.cpp for general commentary.
     // - See ImGuiTableFlags_ and ImGuiTableColumnFlags_ enums for a description of available flags.
     // The typical call flow is:
-    // - 1. Call BeginTable().
+    // - 1. Call BeginTable(), early out if returning false.
     // - 2. Optionally call TableSetupColumn() to submit column name/flags/defaults.
     // - 3. Optionally call TableSetupScrollFreeze() to request scroll freezing of columns/rows.
     // - 4. Optionally call TableHeadersRow() to submit a header row. Names are pulled from TableSetupColumn() data.
     // - 5. Populate contents:
     //    - In most situations you can use TableNextRow() + TableSetColumnIndex(N) to start appending into a column.
-    //    - If you are using tables as a sort of grid, where every columns is holding the same type of contents,
+    //    - If you are using tables as a sort of grid, where every column is holding the same type of contents,
     //      you may prefer using TableNextColumn() instead of TableNextRow() + TableSetColumnIndex().
     //      TableNextColumn() will automatically wrap-around into the next row if needed.
     //    - IMPORTANT: Comparatively to the old Columns() API, we need to call TableNextColumn() for the first column!
     //    - Summary of possible call flow:
-    //        --------------------------------------------------------------------------------------------------------
-    //        TableNextRow() -> TableSetColumnIndex(0) -> Text("Hello 0") -> TableSetColumnIndex(1) -> Text("Hello 1")  // OK
-    //        TableNextRow() -> TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK
-    //                          TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK: TableNextColumn() automatically gets to next row!
-    //        TableNextRow()                           -> Text("Hello 0")                                               // Not OK! Missing TableSetColumnIndex() or TableNextColumn()! Text will not appear!
-    //        --------------------------------------------------------------------------------------------------------
+    //        - TableNextRow() -> TableSetColumnIndex(0) -> Text("Hello 0") -> TableSetColumnIndex(1) -> Text("Hello 1")  // OK
+    //        - TableNextRow() -> TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK
+    //        -                   TableNextColumn()      -> Text("Hello 0") -> TableNextColumn()      -> Text("Hello 1")  // OK: TableNextColumn() automatically gets to next row!
+    //        - TableNextRow()                           -> Text("Hello 0")                                               // Not OK! Missing TableSetColumnIndex() or TableNextColumn()! Text will not appear!
     // - 5. Call EndTable()
 
-    public static native boolean beginTable(String id, int column); /*
-        return ImGui::BeginTable(id, column);
-    */
-
-    public static native boolean beginTable(String id, int column, int imGuiTableFlags); /*
-        return ImGui::BeginTable(id, column, imGuiTableFlags);
-    */
-
-    public static native boolean beginTable(String id, int column, int imGuiTableFlags, float outerSizeX, float outerSizeY); /*
-        return ImGui::BeginTable(id, column, imGuiTableFlags, ImVec2(outerSizeX, outerSizeY));
-    */
-
-    public static native boolean beginTable(String id, int column, int imGuiTableFlags, float outerSizeX, float outerSizeY, float innerWidth); /*
-        return ImGui::BeginTable(id, column, imGuiTableFlags, ImVec2(outerSizeX, outerSizeY), innerWidth);
-    */
+    @BindingMethod
+    public static native boolean BeginTable(String id, int columns, @OptArg(callValue = "0") int imGuiTableFlags, @OptArg(callValue = "ImVec2(0,0)") ImVec2 outerSize, @OptArg float innerWidth);
 
     /**
      * Only call EndTable() if BeginTable() returns true!
      */
-    public static native void endTable(); /*
-        ImGui::EndTable();
-    */
+    @BindingMethod
+    public static native void EndTable();
 
     /**
      * Append into the first cell of a new row.
      */
-    public static native void tableNextRow(); /*
-        ImGui::TableNextRow();
-    */
-
-    /**
-     * Append into the first cell of a new row.
-     */
-    public static native void tableNextRow(int imGuiTableRowFlags); /*
-        ImGui::TableNextRow(imGuiTableRowFlags);
-    */
-
-    /**
-     * Append into the first cell of a new row.
-     */
-    public static native void tableNextRow(int imGuiTableRowFlags, float minRowHeight); /*
-        ImGui::TableNextRow(imGuiTableRowFlags, minRowHeight);
-    */
+    @BindingMethod
+    public static native void TableNextRow(@OptArg(callValue = "0") int imGuiTableRowFlags, @OptArg float minRowHeight);
 
     /**
      * Append into the next column (or first column of next row if currently in last column). Return true when column is visible.
      */
-    public static native boolean tableNextColumn(); /*
-        return ImGui::TableNextColumn();
-    */
+    @BindingMethod
+    public static native boolean TableNextColumn();
 
     /**
      * Append into the specified column. Return true when column is visible.
      */
-    public static native boolean tableSetColumnIndex(int columnN); /*
-        return ImGui::TableSetColumnIndex(columnN);
-    */
+    @BindingMethod
+    public static native boolean TableSetColumnIndex(int columnN);
 
     // Tables: Headers & Columns declaration
     // - Use TableSetupColumn() to specify label, resizing policy, default width/weight, id, various other flags etc.
@@ -4573,51 +2022,46 @@ public class ImGui {
     //   some advanced use cases (e.g. adding custom widgets in header row).
     // - Use TableSetupScrollFreeze() to lock columns/rows so they stay visible when scrolled.
 
-    public static native void tableSetupColumn(String label); /*
-        ImGui::TableSetupColumn(label);
-    */
-
-    public static native void tableSetupColumn(String label, int imGuiTableColumnFlags); /*
-        ImGui::TableSetupColumn(label, imGuiTableColumnFlags);
-    */
-
-    public static native void tableSetupColumn(String label, int imGuiTableColumnFlags, float initWidthOrWeight); /*
-        ImGui::TableSetupColumn(label, imGuiTableColumnFlags, initWidthOrWeight);
-    */
-
-    public static native void tableSetupColumn(String label, int imGuiTableColumnFlags, float initWidthOrWeight, int userId); /*
-        ImGui::TableSetupColumn(label, imGuiTableColumnFlags, initWidthOrWeight, userId);
-    */
+    @BindingMethod
+    public static native void TableSetupColumn(String label, @OptArg(callValue = "0") int imGuiTableColumnFlags, @OptArg(callValue = "0.0f") float initWidthOrWeight, @OptArg int userId);
 
     /**
      * Lock columns/rows so they stay visible when scrolled.
      */
-    public static native void tableSetupScrollFreeze(int cols, int rows); /*
-        ImGui::TableSetupScrollFreeze(cols, rows);
-    */
-
-    /**
-     * Submit all headers cells based on data provided to TableSetupColumn() + submit context menu
-     */
-    public static native void tableHeadersRow(); /*
-        ImGui::TableHeadersRow();
-    */
+    @BindingMethod
+    public static native void TableSetupScrollFreeze(int cols, int rows);
 
     /**
      * Submit one header cell manually (rarely used)
      */
-    public static native void tableHeader(String label); /*
-        ImGui::TableHeader(label);
-    */
+    @BindingMethod
+    public static native void TableHeader(String label);
 
-    // Tables: Sorting
-    // - Call TableGetSortSpecs() to retrieve latest sort specs for the table. NULL when not sorting.
-    // - When 'SpecsDirty == true' you should sort your data. It will be true when sorting specs have changed
-    //   since last call, or the first time. Make sure to set 'SpecsDirty = false' after sorting, else you may
-    //   wastefully sort your data every frame!
-    // - Lifetime: don't hold on this pointer over multiple frames or past any subsequent call to BeginTable().
+    /**
+     * Submit all headers cells based on data provided to TableSetupColumn() + submit context menu
+     */
+    @BindingMethod
+    public static native void TableHeadersRow();
 
-    // TODO: TableGetSortSpecs()
+    /**
+     * Submit a row with angled headers for every column with the ImGuiTableColumnFlags_AngledHeader flag. MUST BE FIRST ROW.
+     */
+    @BindingMethod
+    public static native void TableAngledHeadersRow();
+
+    // Tables: Sorting & Miscellaneous functions
+    // - Sorting: call TableGetSortSpecs() to retrieve latest sort specs for the table. NULL when not sorting.
+    //   When 'sort_specs->SpecsDirty == true' you should sort your data. It will be true when sorting specs have
+    //   changed since last call, or the first time. Make sure to set 'SpecsDirty = false' after sorting,
+    //   else you may wastefully sort your data every frame!
+    // - Functions args 'int column_n' treat the default value of -1 as the same as passing the current column index.
+
+    /**
+     * Get latest sort specs for the table (NULL if not sorting).
+     * Lifetime: don't hold on this pointer over multiple frames or past any subsequent call to BeginTable().
+     */
+    @BindingMethod
+    public static native ImGuiTableSortSpecs TableGetSortSpecs();
 
     // Tables: Miscellaneous functions
     // - Functions args 'int column_n' treat the default value of -1 as the same as passing the current column index.
@@ -4625,319 +2069,178 @@ public class ImGui {
     /**
      * Return number of columns (value passed to BeginTable).
      */
-    public static native int tableGetColumnCount(); /*
-        return ImGui::TableGetColumnCount();
-    */
+    @BindingMethod
+    public static native int TableGetColumnCount();
 
     /**
      * Return current column index.
      */
-    public static native int tableGetColumnIndex(); /*
-        return ImGui::TableGetColumnIndex();
-    */
+    @BindingMethod
+    public static native int TableGetColumnIndex();
 
     /**
      * Return current row index.
      */
-    public static native int tableGetRowIndex(); /*
-        return ImGui::TableGetRowIndex();
-    */
+    @BindingMethod
+    public static native int TableGetRowIndex();
 
     /**
      * Return "" if column didn't have a name declared by TableSetupColumn(). Pass -1 to use current column.
      */
-    public static native String tableGetColumnName(); /*
-        return env->NewStringUTF(ImGui::TableGetColumnName());
-    */
+    @BindingMethod
+    public static native String TableGetColumnName(@OptArg int columnN);
 
     /**
-     * Return "" if column didn't have a name declared by TableSetupColumn(). Pass -1 to use current column.
+     * Return column flags, so you can query their Enabled/Visible/Sorted/Hovered status flags. Pass -1 to use current column.
      */
-    public static native String tableGetColumnName(int columnN); /*
-        return env->NewStringUTF(ImGui::TableGetColumnName(columnN));
-    */
+    @BindingMethod
+    public static native int TableGetColumnFlags(@OptArg int columnN);
 
     /**
-     * Return column flags so you can query their Enabled/Visible/Sorted/Hovered status flags. Pass -1 to use current column.
+     * change user accessible enabled/disabled state of a column. Set to false to hide the column.
+     * User can use the context menu to change this themselves (right-click in headers, or right-click in columns body with ImGuiTableFlags_ContextMenuInBody)
      */
-    public static native int tableGetColumnFlags(); /*
-        return ImGui::TableGetColumnFlags();
-    */
+    @BindingMethod
+    public static native void TableSetColumnEnabled(int columnN, boolean value);
 
     /**
-     * Return column flags so you can query their Enabled/Visible/Sorted/Hovered status flags. Pass -1 to use current column.
+     * Return hovered column. return -1 when table is not hovered. return columns_count if the unused space at the right of visible columns is hovered. Can also use (TableGetColumnFlags() & ImGuiTableColumnFlags_IsHovered) instead.
      */
-    public static native int tableGetColumnFlags(int columnN); /*
-        return ImGui::TableGetColumnFlags(columnN);
-    */
+    @BindingMethod
+    public static native int TableGetHoveredColumn();
 
     /**
      * Change the color of a cell, row, or column. See ImGuiTableBgTarget_ flags for details.
      */
-    public static native void tableSetBgColor(int imGuiTableBgTarget, int color); /*
-        ImGui::TableSetBgColor(imGuiTableBgTarget, color);
-    */
-
-    /**
-     * Change the color of a cell, row, or column. See ImGuiTableBgTarget_ flags for details.
-     */
-    public static native void tableSetBgColor(int imGuiTableBgTarget, int color, int columnN); /*
-        ImGui::TableSetBgColor(imGuiTableBgTarget, color, columnN);
-    */
+    @BindingMethod
+    public static native void TableSetBgColor(int imGuiTableBgTarget, int color, @OptArg int columnN);
 
     // Legacy Columns API (2020: prefer using Tables!)
     // Columns
     // - You can also use SameLine(posX) to mimic simplified columns.
 
-    public static native void columns(); /*
-        ImGui::Columns();
-    */
-
-    public static native void columns(int count); /*
-        ImGui::Columns(count);
-    */
-
-    public static native void columns(int count, String id); /*
-        ImGui::Columns(count, id);
-    */
-
-    public static native void columns(int count, String id, boolean border); /*
-        ImGui::Columns(count, id, border);
-    */
+    @BindingMethod
+    public static native void Columns(@OptArg(callValue = "1") int count, @OptArg(callValue = "NULL") String id, @OptArg boolean border);
 
     /**
      * Next column, defaults to current row or next row if the current row is finished
      */
-    public static native void nextColumn(); /*
-        ImGui::NextColumn();
-    */
+    @BindingMethod
+    public static native void NextColumn();
 
     /**
      * Get current column index
      */
-    public static native int getColumnIndex(); /*
-        return ImGui::GetColumnIndex();
-     */
+    @BindingMethod
+    public static native int GetColumnIndex();
 
     /**
      * Get column width (in pixels). pass -1 to use current column
      */
-    public static native float getColumnWidth(); /*
-        return ImGui::GetColumnWidth();
-    */
-
-    /**
-     * Get column width (in pixels). pass -1 to use current column
-     */
-    public static native float getColumnWidth(int columnIndex); /*
-        return ImGui::GetColumnWidth(columnIndex);
-    */
+    @BindingMethod
+    public static native float GetColumnWidth(@OptArg int columnIndex);
 
     /**
      * Set column width (in pixels). pass -1 to use current column
      */
-    public static native void setColumnWidth(int columnIndex, float width); /*
-        ImGui::SetColumnWidth(columnIndex, width);
-    */
+    @BindingMethod
+    public static native void SetColumnWidth(int columnIndex, float width);
 
     /**
      * Get position of column line (in pixels, from the left side of the contents region). pass -1 to use current column, otherwise 0..GetColumnsCount() inclusive. column 0 is typically 0.0f
      */
-    public static native float getColumnOffset(); /*
-        return ImGui::GetColumnOffset();
-    */
-
-    /**
-     * Get position of column line (in pixels, from the left side of the contents region). pass -1 to use current column, otherwise 0..GetColumnsCount() inclusive. column 0 is typically 0.0f
-     */
-    public static native float getColumnOffset(int columnIndex); /*
-        return ImGui::GetColumnOffset(columnIndex);
-    */
+    @BindingMethod
+    public static native float GetColumnOffset(@OptArg int columnIndex);
 
     /**
      * Set position of column line (in pixels, from the left side of the contents region). pass -1 to use current column
      */
-    public static native void setColumnOffset(int columnIndex, float offsetX); /*
-        ImGui::SetColumnOffset(columnIndex, offsetX);
-    */
+    @BindingMethod
+    public static native void SetColumnOffset(int columnIndex, float offsetX);
 
-    public static native int getColumnsCount(); /*
-        return ImGui::GetColumnsCount();
-    */
+    @BindingMethod
+    public static native int GetColumnsCount();
 
     // Tab Bars, Tabs
-    // Note: Tabs are automatically created by the docking system. Use this to create tab bars/tabs yourself without docking being involved.
+    // - Note: Tabs are automatically created by the docking system (when in 'docking' branch). Use this to create tab bars/tabs yourself.
 
     /**
      * Create and append into a TabBar
      */
-    public static native boolean beginTabBar(String strId); /*
-        return ImGui::BeginTabBar(strId);
-    */
-
-    /**
-     * Create and append into a TabBar
-     */
-    public static native boolean beginTabBar(String strId, int imGuiTabBarFlags); /*
-        return ImGui::BeginTabBar(strId, imGuiTabBarFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginTabBar(String strId, @OptArg int imGuiTabBarFlags);
 
     /**
      * Only call EndTabBar() if BeginTabBar() returns true!
      */
-    public static native void endTabBar(); /*
-        ImGui::EndTabBar();
-    */
+    @BindingMethod
+    public static native void EndTabBar();
 
     /**
      * Create a Tab. Returns true if the Tab is selected.
      */
-    public static native boolean beginTabItem(String label); /*
-        return ImGui::BeginTabItem(label);
-    */
-
-    /**
-     * Create a Tab. Returns true if the Tab is selected.
-     */
-    public static boolean beginTabItem(String label, ImBoolean pOpen) {
-        return nBeginTabItem(label, pOpen.getData(), 0);
-    }
-
-    /**
-     * Create a Tab. Returns true if the Tab is selected.
-     */
-    public static boolean beginTabItem(String label, int imGuiTabItemFlags) {
-        return nBeginTabItem(label, imGuiTabItemFlags);
-    }
-
-    /**
-     * Create a Tab. Returns true if the Tab is selected.
-     */
-    public static boolean beginTabItem(String label, ImBoolean pOpen, int imGuiTabItemFlags) {
-        return nBeginTabItem(label, pOpen.getData(), imGuiTabItemFlags);
-    }
-
-    private static native boolean nBeginTabItem(String label, int imGuiTabItemFlags); /*
-        return ImGui::BeginTabItem(label, NULL, imGuiTabItemFlags);
-    */
-
-    private static native boolean nBeginTabItem(String label, boolean[] pOpen, int imGuiTabItemFlags); /*
-        return ImGui::BeginTabItem(label, &pOpen[0], imGuiTabItemFlags);
-    */
+    @BindingMethod
+    public static native boolean BeginTabItem(String label, @OptArg(callValue = "NULL") ImBoolean pOpen, @OptArg int imGuiTabItemFlags);
 
     /**
      * Only call EndTabItem() if BeginTabItem() returns true!
      */
-    public static native void endTabItem(); /*
-        ImGui::EndTabItem();
-    */
+    @BindingMethod
+    public static native void EndTabItem();
 
     /**
      * Create a Tab behaving like a button. return true when clicked. cannot be selected in the tab bar.
      */
-    public static native boolean tabItemButton(String label); /*
-        return ImGui::TabItemButton(label);
-    */
-
-    /**
-     * Create a Tab behaving like a button. return true when clicked. cannot be selected in the tab bar.
-     */
-    public static native boolean tabItemButton(String label, int imGuiTabItemFlags); /*
-        return ImGui::TabItemButton(label, imGuiTabItemFlags);
-    */
+    @BindingMethod
+    public static native boolean TabItemButton(String label, @OptArg int imGuiTabItemFlags);
 
     /**
      * Notify TabBar or Docking system of a closed tab/window ahead (useful to reduce visual flicker on reorderable tab bars).
      * For tab-bar: call after BeginTabBar() and before Tab submissions. Otherwise call with a window name.
      */
-    public static native void setTabItemClosed(String tabOrDockedWindowLabel); /*
-        ImGui::SetTabItemClosed(tabOrDockedWindowLabel);
-    */
+    @BindingMethod
+    public static native void SetTabItemClosed(String tabOrDockedWindowLabel);
 
     // Docking
     // [BETA API] Enable with io.ConfigFlags |= ImGuiConfigFlags_DockingEnable.
     // Note: You can use most Docking facilities without calling any API. You DO NOT need to call DockSpace() to use Docking!
-    // - To dock windows: if io.ConfigDockingWithShift == false (default) drag window from their title bar.
-    // - To dock windows: if io.ConfigDockingWithShift == true: hold SHIFT anywhere while moving windows.
-    // About DockSpace:
+    // - Drag from window title bar or their tab to dock/undock. Hold SHIFT to disable docking.
+    // - Drag from window menu button (upper-left button) to undock an entire node (all windows).
+    // - When io.ConfigDockingWithShift == true, you instead need to hold SHIFT to enable docking.
+    // About dockspaces:
+    // - Use DockSpaceOverViewport() to create a window covering the screen or a specific viewport + a dockspace inside it.
+    //   This is often used with ImGuiDockNodeFlags_PassthruCentralNode to make it transparent.
     // - Use DockSpace() to create an explicit dock node _within_ an existing window. See Docking demo for details.
-    // - DockSpace() needs to be submitted _before_ any window they can host. If you use a dockspace, submit it early in your app.
+    // - Important: Dockspaces need to be submitted _before_ any window they can host. Submit it early in your frame!
+    // - Important: Dockspaces need to be kept alive if hidden, otherwise windows docked into it will be undocked.
+    //   e.g. if you have multiple tabs with a dockspace inside each tab: submit the non-visible dockspaces with ImGuiDockNodeFlags_KeepAliveOnly.
 
-    public static int dockSpace(int imGuiID) {
-        return nDockSpace(imGuiID, 0, 0, 0, 0);
-    }
+    @BindingMethod
+    public static native int DockSpace(int dockspaceId, @OptArg(callValue = "ImVec2(0,0)") ImVec2 size, @OptArg(callValue = "0") int imGuiDockNodeFlags, @OptArg ImGuiWindowClass windowClass);
 
-    public static int dockSpace(int imGuiID, float sizeX, float sizeY) {
-        return nDockSpace(imGuiID, sizeX, sizeY, 0, 0);
-    }
-
-    public static int dockSpace(int imGuiID, float sizeX, float sizeY, int imGuiDockNodeFlags) {
-        return nDockSpace(imGuiID, sizeX, sizeY, imGuiDockNodeFlags, 0);
-    }
-
-    public static int dockSpace(int imGuiID, float sizeX, float sizeY, int imGuiDockNodeFlags, ImGuiWindowClass imGuiWindowClass) {
-        return nDockSpace(imGuiID, sizeX, sizeY, imGuiDockNodeFlags, imGuiWindowClass.ptr);
-    }
-
-    private static native int nDockSpace(int imGuiID, float sizeX, float sizeY, int imGuiDockNodeFlags, long windowClassPtr); /*
-        return ImGui::DockSpace(imGuiID, ImVec2(sizeX, sizeY), imGuiDockNodeFlags, windowClassPtr != 0 ? (ImGuiWindowClass*)windowClassPtr : NULL);
-    */
-
-    public static int dockSpaceOverViewport() {
-        return nDockSpaceOverViewport(0, 0, 0);
-    }
-
-    public static int dockSpaceOverViewport(ImGuiViewport viewport) {
-        return nDockSpaceOverViewport(viewport.ptr, 0, 0);
-    }
-
-    public static int dockSpaceOverViewport(ImGuiViewport viewport, int imGuiDockNodeFlags) {
-        return nDockSpaceOverViewport(viewport.ptr, imGuiDockNodeFlags, 0);
-    }
-
-    public static int dockSpaceOverViewport(ImGuiViewport viewport, int imGuiDockNodeFlags, ImGuiWindowClass windowClass) {
-        return nDockSpaceOverViewport(viewport.ptr, imGuiDockNodeFlags, windowClass.ptr);
-    }
-
-    private static native int nDockSpaceOverViewport(long viewportPtr, int imGuiDockNodeFlags, long windowClassPtr); /*
-        return ImGui::DockSpaceOverViewport(viewportPtr != 0 ? (ImGuiViewport*)viewportPtr : NULL, imGuiDockNodeFlags, windowClassPtr != 0 ? (ImGuiWindowClass*)windowClassPtr : NULL);
-    */
+    @BindingMethod
+    public static native int DockSpaceOverViewport(@OptArg(callValue = "0") int dockspaceId, @OptArg ImGuiViewport viewport, @OptArg(callValue = "0") int imGuiDockNodeFlags, @OptArg ImGuiWindowClass windowClass);
 
     /**
      * Set next window dock id
      */
-    public static native void setNextWindowDockID(int dockId); /*
-        ImGui::SetNextWindowDockID(dockId);
-    */
-
-    /**
-     * Set next window dock id
-     */
-    public static native void setNextWindowDockID(int dockId, int imGuiCond); /*
-        ImGui::SetNextWindowDockID(dockId, imGuiCond);
-    */
+    @BindingMethod
+    public static native void SetNextWindowDockID(int dockId, @OptArg int imGuiCond);
 
     /**
      * set next window class (rare/advanced uses: provide hints to the platform backend via altered viewport flags and parent/child info)
      */
-    public static void setNextWindowClass(ImGuiWindowClass windowClass) {
-        nSetNextWindowClass(windowClass.ptr);
-    }
+    @BindingMethod
+    public static native void SetNextWindowClass(ImGuiWindowClass windowClass);
 
-    private static native void nSetNextWindowClass(long windowClassPtr); /*
-        ImGui::SetNextWindowClass((ImGuiWindowClass*)windowClassPtr);
-    */
-
-    public static native int getWindowDockID(); /*
-        return ImGui::GetWindowDockID();
-    */
+    @BindingMethod
+    public static native int GetWindowDockID();
 
     /**
      * Is current window docked into another window?
      */
-    public static native boolean isWindowDocked(); /*
-        return ImGui::IsWindowDocked();
-    */
+    @BindingMethod
+    public static native boolean IsWindowDocked();
 
     // Logging/Capture
     // - All text output from the interface can be captured into tty/file/clipboard. By default, tree nodes are automatically opened during logging.
@@ -4945,93 +2248,50 @@ public class ImGui {
     /**
      * Start logging to tty (stdout)
      */
-    public static native void logToTTY(); /*
-        ImGui::LogToTTY();
-    */
-
-    /**
-     * Start logging to tty (stdout)
-     */
-    public static native void logToTTY(int autoOpenDepth); /*
-        ImGui::LogToTTY(autoOpenDepth);
-    */
+    @BindingMethod
+    public static native void LogToTTY(@OptArg int autoOpenDepth);
 
     /**
      * Start logging to file
      */
-    public static native void logToFile(); /*
-        ImGui::LogToFile();
-    */
-
-    /**
-     * Start logging to file
-     */
-    public static native void logToFile(int autoOpenDepth); /*
-        ImGui::LogToFile(autoOpenDepth);
-    */
-
-    /**
-     * Start logging to file
-     */
-    public static native void logToFile(int autoOpenDepth, String filename); /*
-        ImGui::LogToFile(autoOpenDepth, filename);
-    */
+    @BindingMethod
+    public static native void LogToFile(@OptArg(callValue = "-1") int autoOpenDepth, @OptArg String filename);
 
     /**
      * Start logging to OS clipboard
      */
-    public static native void logToClipboard(); /*
-        ImGui::LogToClipboard();
-    */
-
-
-    /**
-     * Start logging to OS clipboard
-     */
-    public static native void logToClipboard(int autoOpenDepth); /*
-        ImGui::LogToClipboard(autoOpenDepth);
-    */
+    @BindingMethod
+    public static native void LogToClipboard(@OptArg int autoOpenDepth);
 
     /**
      * Stop logging (close file, etc.)
      */
-    public static native void logFinish(); /*
-        ImGui::LogFinish();
-    */
+    @BindingMethod
+    public static native void LogFinish();
 
     /**
      * Helper to display buttons for logging to tty/file/clipboard
      */
-    public static native void logButtons(); /*
-        ImGui::LogButtons();
-    */
+    @BindingMethod
+    public static native void LogButtons();
 
     /**
      * Pass text data straight to log (without being displayed)
      */
-    public static native void logText(String text); /*
-        ImGui::LogText(text, NULL);
-    */
+    @BindingMethod
+    public static native void LogText(String text, Void NULL);
 
     // Drag and Drop
     // - If you stop calling BeginDragDropSource() the payload is preserved however it won't have a preview tooltip (we currently display a fallback "..." tooltip as replacement)
 
+    /**
+     * Call when the current item is active. If this return true, you can call SetDragDropPayload() + EndDragDropSource()
+     */
+    @BindingMethod
+    public static native boolean BeginDragDropSource(@OptArg int imGuiDragDropFlags);
+
     private static WeakReference<Object> payloadRef = null;
     private static final byte[] PAYLOAD_PLACEHOLDER_DATA = new byte[1];
-
-    /**
-     * Call when the current item is active. If this return true, you can call SetDragDropPayload() + EndDragDropSource()
-     */
-    public static native boolean beginDragDropSource(); /*
-        return ImGui::BeginDragDropSource();
-    */
-
-    /**
-     * Call when the current item is active. If this return true, you can call SetDragDropPayload() + EndDragDropSource()
-     */
-    public static native boolean beginDragDropSource(int imGuiDragDropFlags); /*
-        return ImGui::BeginDragDropSource(imGuiDragDropFlags);
-    */
 
     /**
      * Type is a user defined string of maximum 32 characters. Strings starting with '_' are reserved for dear imgui internal types.
@@ -5041,7 +2301,7 @@ public class ImGui {
      * Binding stores a reference to the object in a form of {@link WeakReference}.
      */
     public static boolean setDragDropPayload(final String dataType, final Object payload) {
-        return setDragDropPayload(dataType, payload, ImGuiCond.None);
+        return setDragDropPayload(dataType, payload, 0);
     }
 
     /**
@@ -5062,7 +2322,7 @@ public class ImGui {
      * Binding alternative for {@link #setDragDropPayload(String, Object)}, which uses payload class as a unique identifier.
      */
     public static boolean setDragDropPayload(final Object payload) {
-        return setDragDropPayload(payload, ImGuiCond.None);
+        return setDragDropPayload(payload, 0);
     }
 
     /**
@@ -5079,29 +2339,27 @@ public class ImGui {
     /**
      * Only call EndDragDropSource() if BeginDragDropSource() returns true!
      */
-    public static native void endDragDropSource(); /*
-        ImGui::EndDragDropSource();
-    */
+    @BindingMethod
+    public static native void EndDragDropSource();
 
     /**
      * Call after submitting an item that may receive a payload. If this returns true, you can call AcceptDragDropPayload() + EndDragDropTarget()
      */
-    public static native boolean beginDragDropTarget(); /*
-        return ImGui::BeginDragDropTarget();
-    */
+    @BindingMethod
+    public static native boolean BeginDragDropTarget();
 
     /**
      * Accept contents of a given type. If ImGuiDragDropFlags_AcceptBeforeDelivery is set you can peek into the payload before the mouse button is released.
      */
     public static <T> T acceptDragDropPayload(final String dataType) {
-        return acceptDragDropPayload(dataType, ImGuiDragDropFlags.None);
+        return acceptDragDropPayload(dataType, 0/*ImGuiDragDropFlags.None*/);
     }
 
     /**
      * Type safe alternative for {@link #acceptDragDropPayload(String)}, since it checks assignability of the accepted class.
      */
     public static <T> T acceptDragDropPayload(final String dataType, final Class<T> aClass) {
-        return acceptDragDropPayload(dataType, ImGuiDragDropFlags.None, aClass);
+        return acceptDragDropPayload(dataType, 0/*ImGuiDragDropFlags.None*/, aClass);
     }
 
     /**
@@ -5131,7 +2389,7 @@ public class ImGui {
      * Binding alternative for {@link #acceptDragDropPayload(String)}, which uses payload class as a unique identifier.
      */
     public static <T> T acceptDragDropPayload(final Class<T> aClass) {
-        return acceptDragDropPayload(String.valueOf(aClass.hashCode()), ImGuiDragDropFlags.None, aClass);
+        return acceptDragDropPayload(String.valueOf(aClass.hashCode()), 0/*ImGuiDragDropFlags.None*/, aClass);
     }
 
     /**
@@ -5148,12 +2406,11 @@ public class ImGui {
     /**
      * Only call EndDragDropTarget() if BeginDragDropTarget() returns true!
      */
-    public static native void endDragDropTarget(); /*
-        ImGui::EndDragDropTarget();
-    */
+    @BindingMethod
+    public static native void EndDragDropTarget();
 
     /**
-     * Peek directly into the current payload from anywhere. May return NULL.
+     * Peek directly into the current payload from anywhere. returns NULL when drag and drop is finished or inactive. use ImGuiPayload::IsDataType() to test for the payload type.
      */
     @SuppressWarnings("unchecked")
     public static <T> T getDragDropPayload() {
@@ -5197,38 +2454,31 @@ public class ImGui {
         return payload != NULL && payload->IsDataType(dataType);
     */
 
-    /**
-     * Disable all user interactions and dim items visuals (applying style.DisabledAlpha over current colors)
-     * BeginDisabled(false) essentially does nothing useful but is provided to facilitate use of boolean expressions.
-     * If you can avoid calling BeginDisabled(False)/EndDisabled() best to avoid it.
-     */
-    public static void beginDisabled() {
-        beginDisabled(true);
-    }
+    // Disabling [BETA API]
+    // - Disable all user interactions and dim items visuals (applying style.DisabledAlpha over current colors)
+    // - Those can be nested but it cannot be used to enable an already disabled section (a single BeginDisabled(true) in the stack is enough to keep everything disabled)
+    // - Tooltips windows by exception are opted out of disabling.
+    // - BeginDisabled(false) essentially does nothing useful but is provided to facilitate use of boolean expressions. If you can avoid calling BeginDisabled(False)/EndDisabled() best to avoid it.
 
     /**
      * Disable all user interactions and dim items visuals (applying style.DisabledAlpha over current colors)
      * BeginDisabled(false) essentially does nothing useful but is provided to facilitate use of boolean expressions.
      * If you can avoid calling BeginDisabled(False)/EndDisabled() best to avoid it.
      */
-    public static native void beginDisabled(boolean disabled); /*
-        ImGui::BeginDisabled(disabled);
-    */
+    @BindingMethod
+    public static native void BeginDisabled(@OptArg boolean disabled);
 
-    public static native void endDisabled(); /*
-        ImGui::EndDisabled();
-    */
+    @BindingMethod
+    public static native void EndDisabled();
 
     // Clipping
     // - Mouse hovering is affected by ImGui::PushClipRect() calls, unlike direct calls to ImDrawList::PushClipRect() which are render only.
 
-    public static native void pushClipRect(float clipRectMinX, float clipRectMinY, float clipRectMaxX, float clipRectMaxY, boolean intersectWithCurrentClipRect); /*
-        ImGui::PushClipRect(ImVec2(clipRectMinX, clipRectMinY), ImVec2(clipRectMaxX, clipRectMaxY), intersectWithCurrentClipRect);
-    */
+    @BindingMethod
+    public static native void PushClipRect(ImVec2 clipRectMin, ImVec2 clipRectMax, boolean intersectWithCurrentClipRect);
 
-    public static native void popClipRect(); /*
-        ImGui::PopClipRect();
-    */
+    @BindingMethod
+    public static native void PopClipRect();
 
     // Focus, Activation
     // - Prefer using "SetItemDefaultFocus()" over "if (IsWindowAppearing()) SetScrollHereY()" when applicable to signify "this is the default item"
@@ -5236,23 +2486,24 @@ public class ImGui {
     /**
      * Make last item the default focused item of a window.
      */
-    public static native void setItemDefaultFocus(); /*
-        ImGui::SetItemDefaultFocus();
-    */
+    @BindingMethod
+    public static native void SetItemDefaultFocus();
 
     /**
      * Focus keyboard on the next widget. Use positive 'offset' to access sub components of a multiple component widget. Use -1 to access previous widget.
      */
-    public static native void setKeyboardFocusHere(); /*
-        ImGui::SetKeyboardFocusHere();
-    */
+    @BindingMethod
+    public static native void SetKeyboardFocusHere(@OptArg int offset);
+
+    // Overlapping mode
 
     /**
-     * Focus keyboard on the next widget. Use positive 'offset' to access sub components of a multiple component widget. Use -1 to access previous widget.
+     * Allow next item to be overlapped by a subsequent item.
+     * Useful with invisible buttons, selectable, treenode covering an area where subsequent items may need to be added.
+     * Note that both Selectable() and TreeNode() have dedicated flags doing this.
      */
-    public static native void setKeyboardFocusHere(int offset); /*
-        ImGui::SetKeyboardFocusHere(offset);
-    */
+    @BindingMethod
+    public static native void SetNextItemAllowOverlap();
 
     // Item/Widgets Utilities
     // - Most of the functions are referring to the last/previous item we submitted.
@@ -5261,208 +2512,108 @@ public class ImGui {
     /**
      * Is the last item hovered? (and usable, aka not blocked by a popup, etc.). See ImGuiHoveredFlags for more options.
      */
-    public static native boolean isItemHovered(); /*
-        return ImGui::IsItemHovered();
-    */
-
-    /**
-     * Is the last item hovered? (and usable, aka not blocked by a popup, etc.). See ImGuiHoveredFlags for more options.
-     */
-    public static native boolean isItemHovered(int imGuiHoveredFlags); /*
-        return ImGui::IsItemHovered(imGuiHoveredFlags);
-    */
+    @BindingMethod
+    public static native boolean IsItemHovered(@OptArg int imGuiHoveredFlags);
 
     /**
      * Is the last item active? (e.g. button being held, text field being edited.
      * This will continuously return true while holding mouse button on an item.
      * Items that don't interact will always return false)
      */
-    public static native boolean isItemActive(); /*
-        return ImGui::IsItemActive();
-    */
+    @BindingMethod
+    public static native boolean IsItemActive();
 
     /**
      * Is the last item focused for keyboard/gamepad navigation?
      */
-    public static native boolean isItemFocused(); /*
-        return ImGui::IsItemFocused();
-    */
+    @BindingMethod
+    public static native boolean IsItemFocused();
 
     /**
-     * Is the last item clicked? (e.g. button/node just clicked on) == {@code IsMouseClicked(mouseButton) && IsItemHovered()}
+     * Is the last item hovered and mouse clicked on? (**)  == {@code IsMouseClicked(mouseButton) && IsItemHovered()}
+     * Important. (**) this is NOT equivalent to the behavior of e.g. Button(). Read comments in function definition.
      */
-    public static native boolean isItemClicked(); /*
-        return ImGui::IsItemClicked();
-    */
-
-    /**
-     * Is the last item clicked? (e.g. button/node just clicked on) == {@code IsMouseClicked(mouseButton) && IsItemHovered()}
-     */
-    public static native boolean isItemClicked(int mouseButton); /*
-        return ImGui::IsItemClicked(mouseButton);
-    */
+    @BindingMethod
+    public static native boolean IsItemClicked(@OptArg int mouseButton);
 
     /**
      * Is the last item visible? (items may be out of sight because of clipping/scrolling)
      */
-    public static native boolean isItemVisible(); /*
-        return ImGui::IsItemVisible();
-    */
+    @BindingMethod
+    public static native boolean IsItemVisible();
 
     /**
      * Did the last item modify its underlying value this frame? or was pressed? This is generally the same as the "bool" return value of many widgets.
      */
-    public static native boolean isItemEdited(); /*
-        return ImGui::IsItemEdited();
-    */
+    @BindingMethod
+    public static native boolean IsItemEdited();
 
     /**
      * Was the last item just made active (item was previously inactive).
      */
-    public static native boolean isItemActivated(); /*
-        return ImGui::IsItemActivated();
-    */
+    @BindingMethod
+    public static native boolean IsItemActivated();
 
     /**
-     * Was the last item just made inactive (item was previously active). Useful for Undo/Redo patterns with widgets that requires continuous editing.
+     * Was the last item just made inactive (item was previously active). Useful for Undo/Redo patterns with widgets that require continuous editing.
      */
-    public static native boolean isItemDeactivated(); /*
-        return ImGui::IsItemDeactivated();
-    */
+    @BindingMethod
+    public static native boolean IsItemDeactivated();
 
     /**
      * Was the last item just made inactive and made a value change when it was active? (e.g. Slider/Drag moved).
-     * Useful for Undo/Redo patterns with widgets that requires continuous editing.
+     * Useful for Undo/Redo patterns with widgets that require continuous editing.
      * Note that you may get false positives (some widgets such as Combo()/ListBox()/Selectable() will return true even when clicking an already selected item).
      */
-    public static native boolean isItemDeactivatedAfterEdit(); /*
-        return ImGui::IsItemDeactivatedAfterEdit();
-    */
+    @BindingMethod
+    public static native boolean IsItemDeactivatedAfterEdit();
 
     /**
      * Was the last item open state toggled? set by TreeNode().
      */
-    public static native boolean isItemToggledOpen(); /*
-        return ImGui::IsItemToggledOpen();
-    */
+    @BindingMethod
+    public static native boolean IsItemToggledOpen();
 
     /**
      * Is any item hovered?
      */
-    public static native boolean isAnyItemHovered(); /*
-        return ImGui::IsAnyItemHovered();
-    */
+    @BindingMethod
+    public static native boolean IsAnyItemHovered();
 
     /**
      * Is any item active?
      */
-    public static native boolean isAnyItemActive(); /*
-        return ImGui::IsAnyItemActive();
-    */
-
+    @BindingMethod
+    public static native boolean IsAnyItemActive();
     /**
      * Is any item focused?
      */
-    public static native boolean isAnyItemFocused(); /*
-        return ImGui::IsAnyItemFocused();
-    */
+    @BindingMethod
+    public static native boolean IsAnyItemFocused();
+
+    /**
+     * Get ID of last item (~~ often same ImGui::GetID(label) beforehand)
+     */
+    @BindingMethod
+    public static native int GetItemID();
 
     /**
      * Get upper-left bounding rectangle of the last item (screen space)
      */
-    public static ImVec2 getItemRectMin() {
-        final ImVec2 value = new ImVec2();
-        getItemRectMin(value);
-        return value;
-    }
-
-    /**
-     * Get upper-left bounding rectangle of the last item (screen space)
-     */
-    public static native void getItemRectMin(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetItemRectMin(), dstImVec2);
-    */
-
-    /**
-     * Get upper-left bounding rectangle of the last item (screen space)
-     */
-    public static native float getItemRectMinX(); /*
-        return ImGui::GetItemRectMin().x;
-    */
-
-    /**
-     * Get upper-left bounding rectangle of the last item (screen space)
-     */
-    public static native float getItemRectMinY(); /*
-        return ImGui::GetItemRectMin().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetItemRectMin();
 
     /**
      * Get lower-right bounding rectangle of the last item (screen space)
      */
-    public static ImVec2 getItemRectMax() {
-        final ImVec2 value = new ImVec2();
-        getItemRectMax(value);
-        return value;
-    }
-
-    /**
-     * Get lower-right bounding rectangle of the last item (screen space)
-     */
-    public static native void getItemRectMax(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetItemRectMax(), dstImVec2);
-    */
-
-    /**
-     * Get lower-right bounding rectangle of the last item (screen space)
-     */
-    public static native float getItemRectMaxX(); /*
-        return ImGui::GetItemRectMax().x;
-    */
-
-    /**
-     * Get lower-right bounding rectangle of the last item (screen space)
-     */
-    public static native float getItemRectMaxY(); /*
-        return ImGui::GetItemRectMax().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetItemRectMax();
 
     /**
      * Get size of last item
      */
-    public static ImVec2 getItemRectSize() {
-        final ImVec2 value = new ImVec2();
-        getItemRectSize(value);
-        return value;
-    }
-
-    /**
-     * Get size of last item
-     */
-    public static native void getItemRectSize(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetItemRectSize(), dstImVec2);
-    */
-
-    /**
-     * Get size of last item
-     */
-    public static native float getItemRectSizeX(); /*
-        return ImGui::GetItemRectSize().x;
-    */
-
-    /**
-     * Get size of last item
-     */
-    public static native float getItemRectSizeY(); /*
-        return ImGui::GetItemRectSize().y;
-    */
-
-    /**
-     * Allow last item to be overlapped by a subsequent item. sometimes useful with invisible buttons, selectables, etc. to catch unused area.
-     */
-    public static native void setItemAllowOverlap(); /*
-        ImGui::SetItemAllowOverlap();
-    */
+    @BindingMethod
+    public static native ImVec2 GetItemRectSize();
 
     // Viewports
     // - Currently represents the Platform Window created by the application which is hosting our Dear ImGui windows.
@@ -5472,277 +2623,175 @@ public class ImGui {
     /**
      * Return primary/default viewport.
      */
-    public static ImGuiViewport getMainViewport() {
-        MAIN_VIEWPORT.ptr = nGetMainViewport();
-        return MAIN_VIEWPORT;
-    }
+    @BindingMethod
+    @ReturnValue(isStatic = true)
+    public static native ImGuiViewport GetMainViewport();
 
-    private static native long nGetMainViewport(); /*
-        return (intptr_t)ImGui::GetMainViewport();
-    */
+    // Background/Foreground Draw Lists
+
+    /**
+     * Get background draw list for the given viewport or viewport associated to the current window.
+     * This draw list will be the first rendering one. Useful to quickly draw shapes/text behind dear imgui contents.
+     */
+    @BindingMethod
+    public static native ImDrawList GetBackgroundDrawList(@OptArg ImGuiViewport viewport);
+
+    /**
+     * Get foreground draw list for the given viewport or viewport associated to the current window.
+     * This draw list will be the first rendering one. Useful to quickly draw shapes/text behind dear imgui contents.
+     */
+    @BindingMethod
+    public static native ImDrawList GetForegroundDrawList(@OptArg ImGuiViewport viewport);
 
     // Miscellaneous Utilities
 
     /**
      * Test if rectangle (of given size, starting from cursor position) is visible / not clipped.
      */
-    public static native boolean isRectVisible(float width, float height); /*
-        return ImGui::IsRectVisible(ImVec2(width, height));
-    */
+    @BindingMethod
+    public static native boolean IsRectVisible(ImVec2 size);
 
     /**
      * Test if rectangle (in screen space) is visible / not clipped. to perform coarse clipping on user's side.
      */
-    public static native boolean isRectVisible(float minX, float minY, float maxX, float maxY); /*
-        return ImGui::IsRectVisible(ImVec2(minX, minY), ImVec2(maxX, maxY));
-    */
+    @BindingMethod
+    public static native boolean IsRectVisible(ImVec2 rectMin, ImVec2 rectMax);
 
     /**
      * Get global imgui time. incremented by io.DeltaTime every frame.
      */
-    public static native double getTime(); /*
-        return ImGui::GetTime();
-    */
+    @BindingMethod
+    public static native double GetTime();
 
     /**
      * Get global imgui frame count. incremented by 1 every frame.
      */
-    public static native int getFrameCount(); /*
-        return ImGui::GetFrameCount();
-    */
+    @BindingMethod
+    public static native int GetFrameCount();
 
-    /**
-     * Get background draw list for the viewport associated to the current window.
-     * This draw list will be the first rendering one. Useful to quickly draw shapes/text behind dear imgui contents.
-     */
-    public static ImDrawList getBackgroundDrawList() {
-        BACKGROUND_DRAW_LIST.ptr = nGetBackgroundDrawList();
-        return BACKGROUND_DRAW_LIST;
-    }
 
-    private static native long nGetBackgroundDrawList(); /*
-        return (intptr_t)ImGui::GetBackgroundDrawList();
-    */
-
-    /**
-     * Get foreground draw list for the viewport associated to the current window.
-     * This draw list will be the first rendering one. Useful to quickly draw shapes/text behind dear imgui contents.
-     */
-    public static ImDrawList getForegroundDrawList() {
-        FOREGROUND_DRAW_LIST.ptr = nGetForegroundDrawList();
-        return FOREGROUND_DRAW_LIST;
-    }
-
-    private static native long nGetForegroundDrawList(); /*
-        return (intptr_t)ImGui::GetForegroundDrawList();
-    */
-
-    /**
-     * Get background draw list for the given viewport.
-     * This draw list will be the first rendering one. Useful to quickly draw shapes/text behind dear imgui contents.
-     */
-    public static ImDrawList getBackgroundDrawList(ImGuiViewport viewport) {
-        BACKGROUND_DRAW_LIST.ptr = nGetBackgroundDrawList(viewport.ptr);
-        return BACKGROUND_DRAW_LIST;
-    }
-
-    private static native long nGetBackgroundDrawList(long viewportPtr); /*
-        return (intptr_t)ImGui::GetBackgroundDrawList((ImGuiViewport*)viewportPtr);
-    */
-
-    /**
-     * Get foreground draw list for the given viewport.
-     * This draw list will be the last rendered one. Useful to quickly draw shapes/text over dear imgui contents.
-     */
-    public static ImDrawList getForegroundDrawList(ImGuiViewport viewport) {
-        BACKGROUND_DRAW_LIST.ptr = nGetForegroundDrawList(viewport.ptr);
-        return BACKGROUND_DRAW_LIST;
-    }
-
-    private static native long nGetForegroundDrawList(long viewportPtr); /*
-        return (intptr_t)ImGui::GetBackgroundDrawList((ImGuiViewport*)viewportPtr);
-    */
 
     // TODO GetDrawListSharedData
 
     /**
      * Get a string corresponding to the enum value (for display, saving, etc.).
      */
-    public static native String getStyleColorName(int imGuiCol); /*
-        return env->NewStringUTF(ImGui::GetStyleColorName(imGuiCol));
-    */
+    @BindingMethod
+    public static native String GetStyleColorName(int imGuiColIdx);
 
     /**
      * Replace current window storage with our own (if you want to manipulate it yourself, typically clear subsection of it).
      */
-    public static void setStateStorage(final ImGuiStorage storage) {
-        nSetStateStorage(storage.ptr);
-    }
+    @BindingMethod
+    public static native void SetStateStorage(final ImGuiStorage storage);
 
-    private static native void nSetStateStorage(long imGuiStoragePtr); /*
-        ImGui::SetStateStorage((ImGuiStorage*)imGuiStoragePtr);
-    */
-
-    public static ImGuiStorage getStateStorage() {
-        IMGUI_STORAGE.ptr = nGetStateStorage();
-        return IMGUI_STORAGE;
-    }
-
-    private static native long nGetStateStorage(); /*
-        return (intptr_t)ImGui::GetStateStorage();
-    */
-
-    /**
-     * Helper to create a child window / scrolling region that looks like a normal widget frame
-     */
-    public static native boolean beginChildFrame(int id, float width, float height); /*
-        return ImGui::BeginChildFrame(id, ImVec2(width, height));
-    */
-
-    /**
-     * Helper to create a child window / scrolling region that looks like a normal widget frame
-     */
-    public static native boolean beginChildFrame(int id, float width, float height, int imGuiWindowFlags); /*
-        return ImGui::BeginChildFrame(id, ImVec2(width, height), imGuiWindowFlags);
-    */
-
-    /**
-     * Always call EndChildFrame() regardless of BeginChildFrame() return values (which indicates a collapsed/clipped window)
-     */
-    public static native void endChildFrame(); /*
-        ImGui::EndChildFrame();
-    */
+    @BindingMethod
+    public static native ImGuiStorage GetStateStorage();
 
     // Text Utilities
 
-    public static ImVec2 calcTextSize(final String text) {
-        final ImVec2 value = new ImVec2();
-        calcTextSize(value, text);
-        return value;
-    }
-
-    public static ImVec2 calcTextSize(final String text, final boolean hideTextAfterDoubleHash) {
-        final ImVec2 value = new ImVec2();
-        calcTextSize(value, text, hideTextAfterDoubleHash);
-        return value;
-    }
-
-    public static ImVec2 calcTextSize(final String text, final boolean hideTextAfterDoubleHash, final float wrapWidth) {
-        final ImVec2 value = new ImVec2();
-        calcTextSize(value, text, hideTextAfterDoubleHash, wrapWidth);
-        return value;
-    }
-
-    public static native void calcTextSize(ImVec2 dstImVec2, String text); /*
-        ImVec2 src = ImGui::CalcTextSize(text);
-        Jni::ImVec2Cpy(env, src, dstImVec2);
-    */
-
-    public static native void calcTextSize(ImVec2 dstImVec2, String text, boolean hideTextAfterDoubleHash); /*
-        ImVec2 src = ImGui::CalcTextSize(text, NULL, hideTextAfterDoubleHash);
-        Jni::ImVec2Cpy(env, src, dstImVec2);
-    */
-
-    public static native void calcTextSize(ImVec2 dstImVec2, String text, float wrapWidth); /*
-        ImVec2 src = ImGui::CalcTextSize(text, NULL, false, wrapWidth);
-        Jni::ImVec2Cpy(env, src, dstImVec2);
-    */
-
-    public static native void calcTextSize(ImVec2 dstImVec2, String text, boolean hideTextAfterDoubleHash, float wrapWidth); /*
-        ImVec2 src = ImGui::CalcTextSize(text, NULL, hideTextAfterDoubleHash, wrapWidth);
-        Jni::ImVec2Cpy(env, src, dstImVec2);
-    */
+    @BindingMethod
+    public static native ImVec2 CalcTextSize(String text, Void NULL, @OptArg(callValue = "false") boolean hideTextAfterDoubleHash, @OptArg float wrapWidth);
 
     // Color Utilities
 
-    public final ImVec4 colorConvertU32ToFloat4(final int in) {
-        final ImVec4 value = new ImVec4();
-        colorConvertU32ToFloat4(in, value);
-        return value;
+    @BindingMethod
+    public static native ImVec4 ColorConvertU32ToFloat4(final int in);
+
+    @BindingMethod
+    public static native int ColorConvertFloat4ToU32(ImVec4 in);
+
+    public static void colorConvertRGBtoHSV(float[] rgb, float[] hsv){
+        nColorConvertRGBtoHSV(rgb, hsv);
     }
 
-    public static native void colorConvertU32ToFloat4(int in, ImVec4 dstImVec4); /*
-        Jni::ImVec4Cpy(env, ImGui::ColorConvertU32ToFloat4(in), dstImVec4);
-    */
-
-    public static native int colorConvertFloat4ToU32(float r, float g, float b, float a); /*
-        return ImGui::ColorConvertFloat4ToU32(ImVec4(r, g, b, a));
-    */
-
-    public static native void colorConvertRGBtoHSV(float[] rgb, float[] hsv); /*
+    public static native void nColorConvertRGBtoHSV(float[] rgb, float[] hsv); /*
         ImGui::ColorConvertRGBtoHSV(rgb[0], rgb[1], rgb[2], hsv[0], hsv[1], hsv[2]);
     */
 
-    public static native void colorConvertHSVtoRGB(float[] hsv, float[] rgb); /*
+    public static void colorConvertHSVtoRGB(float[] hsv, float[] rgb) {
+        nColorConvertHSVtoRGB(hsv, rgb);
+    }
+
+    public static native void nColorConvertHSVtoRGB(float[] hsv, float[] rgb); /*
         ImGui::ColorConvertHSVtoRGB(hsv[0], hsv[1], hsv[2], rgb[0], rgb[1], rgb[2]);
     */
 
-    // Inputs Utilities: Keyboard
-    // - For 'int user_key_index' you can use your own indices/enums according to how your backend/engine stored them in io.KeysDown[].
-    // - We don't know the meaning of those value. You can use GetKeyIndex() to map a ImGuiKey_ value into the user index.
-
-    /**
-     * Map ImGuiKey_* values into user's key index. == io.KeyMap[key]
-     */
-    public static native int getKeyIndex(int imguiKey); /*
-        return ImGui::GetKeyIndex(imguiKey);
-    */
+    // Inputs Utilities: Keyboard/Mouse/Gamepad
+    // - the ImGuiKey enum contains all possible keyboard, mouse and gamepad inputs (e.g. ImGuiKey_A, ImGuiKey_MouseLeft, ImGuiKey_GamepadDpadUp...).
+    // - before v1.87, we used ImGuiKey to carry native/user indices as defined by each backends. About use of those legacy ImGuiKey values:
+    //  - without IMGUI_DISABLE_OBSOLETE_KEYIO (legacy support): you can still use your legacy native/user indices (< 512) according to how your backend/engine stored them in io.KeysDown[], but need to cast them to ImGuiKey.
+    //  - with    IMGUI_DISABLE_OBSOLETE_KEYIO (this is the way forward): any use of ImGuiKey will assert with key < 512. GetKeyIndex() is pass-through and therefore deprecated (gone if IMGUI_DISABLE_OBSOLETE_KEYIO is defined).
 
     /**
      * Is key being held. == io.KeysDown[user_key_index].
      */
-    public static native boolean isKeyDown(int userKeyIndex); /*
-        return ImGui::IsKeyDown(userKeyIndex);
-    */
+    @BindingMethod
+    public static native boolean IsKeyDown(@ArgValue(staticCast = "ImGuiKey") int key);
 
     /**
      * Was key pressed (went from !Down to Down)? if repeat=true, uses io.KeyRepeatDelay / KeyRepeatRate
      */
-    public static native boolean isKeyPressed(int userKeyIndex); /*
-        return ImGui::IsKeyPressed(userKeyIndex);
-    */
+    @BindingMethod
+    public static native boolean IsKeyPressed(@ArgValue(staticCast = "ImGuiKey") int key, @OptArg boolean repeat);
 
     /**
-     * Was key pressed (went from !Down to Down)? if repeat=true, uses io.KeyRepeatDelay / KeyRepeatRate
+     * Was key released (went from Down to !Down)
      */
-    public static native boolean isKeyPressed(int userKeyIndex, boolean repeat); /*
-        return ImGui::IsKeyPressed(userKeyIndex, repeat);
-    */
+    @BindingMethod
+    public static native boolean IsKeyReleased(@ArgValue(staticCast = "ImGuiKey") int key);
 
     /**
-     * Was key released (went from Down to !Down)..
+     * Was key chord (mods + key) pressed, e.g. you can pass 'ImGuiMod_Ctrl | ImGuiKey_S' as a key-chord.
+     * This doesn't do any routing or focus check, please consider using Shortcut() function instead.
      */
-    public static native boolean isKeyReleased(int userKeyIndex); /*
-        return ImGui::IsKeyReleased(userKeyIndex);
-    */
+    @BindingMethod
+    public static native boolean IsKeyChordPressed(@ArgValue(staticCast = "ImGuiKeyChord") int keyChord);
 
     /**
      * Uses provided repeat rate/delay.
      * Return a count, most often 0 or 1 but might be {@code >1} if RepeatRate is small enough that {@code DeltaTime > RepeatRate}
      */
-    public static native boolean getKeyPressedAmount(int keyIndex, float repeatDelay, float rate); /*
-        return ImGui::GetKeyPressedAmount(keyIndex, repeatDelay, rate);
-    */
+    @BindingMethod
+    public static native boolean GetKeyPressedAmount(@ArgValue(staticCast = "ImGuiKey") int key, float repeatDelay, float rate);
 
     /**
-     * Attention: misleading name! manually override io.WantCaptureKeyboard flag next frame (said flag is entirely left for your application to handle).
-     * e.g. force capture keyboard when your widget is being hovered.
-     * This is equivalent to setting "io.WantCaptureKeyboard = wantCaptureKeyboardValue"; after the next NewFrame() call.
+     * [DEBUG] returns English name of the key. Those names a provided for debugging purpose and are not meant to be saved persistently not compared.
      */
-    public static native void captureKeyboardFromApp(); /*
-        ImGui::CaptureKeyboardFromApp();
-    */
+    @BindingMethod
+    public static native String GetKeyName(@ArgValue(staticCast = "ImGuiKey") int key);
 
     /**
-     * Attention: misleading name! manually override io.WantCaptureKeyboard flag next frame (said flag is entirely left for your application to handle).
-     * e.g. force capture keyboard when your widget is being hovered.
-     * This is equivalent to setting "io.WantCaptureKeyboard = wantCaptureKeyboardValue"; after the next NewFrame() call.
+     * Override io.WantCaptureKeyboard flag next frame (said flag is left for your application to handle,
+     * typically when true it instructs your app to ignore inputs). e.g. force capture keyboard when your widget is being hovered.
+     * This is equivalent to setting "io.WantCaptureKeyboard = want_capture_keyboard"; after the next NewFrame() call.
      */
-    public static native void captureKeyboardFromApp(boolean wantCaptureKeyboardValue); /*
-        ImGui::CaptureKeyboardFromApp(wantCaptureKeyboardValue);
-    */
+    @BindingMethod
+    public static native void SetNextFrameWantCaptureKeyboard(boolean wantCaptureKeyboard);
 
-    // Inputs Utilities: Mouse
+    // Inputs Utilities: Shortcut Testing & Routing [BETA]
+    // - ImGuiKeyChord = a ImGuiKey + optional ImGuiMod_Alt/ImGuiMod_Ctrl/ImGuiMod_Shift/ImGuiMod_Super.
+    //       ImGuiKey_C                          // Accepted by functions taking ImGuiKey or ImGuiKeyChord arguments)
+    //       ImGuiMod_Ctrl | ImGuiKey_C          // Accepted by functions taking ImGuiKeyChord arguments)
+    //   only ImGuiMod_XXX values are legal to combine with an ImGuiKey. You CANNOT combine two ImGuiKey values.
+    // - The general idea is that several callers may register interest in a shortcut, and only one owner gets it.
+    //      Parent   -> call Shortcut(Ctrl+S)    // When Parent is focused, Parent gets the shortcut.
+    //        Child1 -> call Shortcut(Ctrl+S)    // When Child1 is focused, Child1 gets the shortcut (Child1 overrides Parent shortcuts)
+    //        Child2 -> no call                  // When Child2 is focused, Parent gets the shortcut.
+    //   The whole system is order independent, so if Child1 makes its calls before Parent, results will be identical.
+    //   This is an important property as it facilitate working with foreign code or larger codebase.
+    // - To understand the difference:
+    //   - IsKeyChordPressed() compares mods and call IsKeyPressed() -> function has no side-effect.
+    //   - Shortcut() submits a route, routes are resolved, if it currently can be routed it calls IsKeyChordPressed() -> function has (desirable) side-effects as it can prevents another call from getting the route.
+    // - Visualize registered routes in 'Metrics/Debugger->Inputs'.
+
+    @BindingMethod
+    public static native boolean Shortcut(@ArgValue(staticCast = "ImGuiKeyChord") int keyChord, @OptArg int flags);
+
+    @BindingMethod
+    public static native void SetNextItemShortcut(@ArgValue(staticCast = "ImGuiKeyChord") int keyChord, @OptArg int flags);
+
+    // Inputs Utilities: Mouse specific
     // - To refer to a mouse button, you may use named enums in your code e.g. ImGuiMouseButton_Left, ImGuiMouseButton_Right.
     // - You can also use regular integer: it is forever guaranteed that 0=Left, 1=Right, 2=Middle.
     // - Dragging operations are only reported after mouse has moved a certain distance away from the initial clicking position (see 'lock_threshold' and 'io.MouseDraggingThreshold')
@@ -5750,303 +2799,108 @@ public class ImGui {
     /**
      * Is mouse button held (0=left, 1=right, 2=middle)
      */
-    public static native boolean isMouseDown(int button); /*
-        return ImGui::IsMouseDown(button);
-    */
-
-    /**
-     * Is any mouse button held
-     */
-    public static native boolean isAnyMouseDown(); /*
-        return ImGui::IsAnyMouseDown();
-    */
+    @BindingMethod
+    public static native boolean IsMouseDown(int button);
 
     /**
      * Did mouse button clicked (went from !Down to Down) (0=left, 1=right, 2=middle)
      */
-    public static native boolean isMouseClicked(int button); /*
-        return ImGui::IsMouseClicked(button);
-    */
-
-    public static native boolean isMouseClicked(int button, boolean repeat); /*
-        return ImGui::IsMouseClicked(button, repeat);
-    */
-
-    /**
-     * did mouse button double-clicked? (note that a double-click will also report IsMouseClicked() == true).
-     */
-    public static native boolean isMouseDoubleClicked(int button); /*
-        return ImGui::IsMouseDoubleClicked(button);
-    */
-
-    /**
-     * Return the number of successive mouse-clicks at the time where a click happen (otherwise 0).
-     */
-    public static native int getMouseClickedCount(int button); /*
-        return ImGui::GetMouseClickedCount(button);
-    */
+    @BindingMethod
+    public static native boolean IsMouseClicked(int button, @OptArg boolean repeat);
 
     /**
      * Did mouse button released (went from Down to !Down)
      */
-    public static native boolean isMouseReleased(int button); /*
-        return ImGui::IsMouseReleased(button);
-    */
+    @BindingMethod
+    public static native boolean IsMouseReleased(int button);
 
     /**
-     * Is mouse dragging. if lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold
+     * did mouse button double-clicked? (note that a double-click will also report IsMouseClicked() == true).
      */
-    public static native boolean isMouseDragging(int button); /*
-        return ImGui::IsMouseDragging(button);
-    */
+    @BindingMethod
+    public static native boolean IsMouseDoubleClicked(int button);
 
     /**
-     * Is mouse dragging. if lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold
+     * Return the number of successive mouse-clicks at the time where a click happen (otherwise 0).
      */
-    public static native boolean isMouseDragging(int button, float lockThreshold); /*
-        return ImGui::IsMouseDragging(button, lockThreshold);
-    */
+    @BindingMethod
+    public static native int GetMouseClickedCount(int button);
 
     /**
      * Is mouse hovering given bounding rect (in screen space). clipped by current clipping settings, but disregarding of other consideration of focus/window ordering/popup-block.
      */
-    public static native boolean isMouseHoveringRect(float minX, float minY, float maxX, float maxY); /*
-        return ImGui::IsMouseHoveringRect(ImVec2(minX, minY), ImVec2(maxX, maxY));
-    */
-
-    /**
-     * Is mouse hovering given bounding rect (in screen space). clipped by current clipping settings, but disregarding of other consideration of focus/window ordering/popup-block.
-     */
-    public static native boolean isMouseHoveringRect(float minX, float minY, float maxX, float maxY, boolean clip); /*
-        return ImGui::IsMouseHoveringRect(ImVec2(minX, minY), ImVec2(maxX, maxY), clip);
-    */
+    @BindingMethod
+    public static native boolean IsMouseHoveringRect(ImVec2 rMin, ImVec2 rMax, @OptArg boolean clip);
 
     /**
      * By convention we use (-FLT_MAX,-FLT_MAX) to denote that there is no mouse
      */
-    public static native boolean isMousePosValid(); /*
-        return ImGui::IsMousePosValid();
-    */
+    @BindingMethod
+    public static native boolean IsMousePosValid(@OptArg @ArgValue(callPrefix = "&") final ImVec2 mousePos);
 
     /**
-     * By convention we use (-FLT_MAX,-FLT_MAX) to denote that there is no mouse
+     * Is any mouse button held
      */
-    public static native boolean isMousePosValid(float mousePosX, float mousePosY); /*
-        ImVec2 pos = ImVec2(mousePosX, mousePosY);
-        return ImGui::IsMousePosValid(&pos);
-    */
+    @BindingMethod
+    public static native boolean IsAnyMouseDown();
 
     /**
      * Shortcut to ImGui::GetIO().MousePos provided by user, to be consistent with other calls
      */
-    public static ImVec2 getMousePos() {
-        final ImVec2 value = new ImVec2();
-        getMousePos(value);
-        return value;
-    }
-
-    /**
-     * Shortcut to ImGui::GetIO().MousePos provided by user, to be consistent with other calls
-     */
-    public static native void getMousePos(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetMousePos(), dstImVec2);
-    */
-
-    /**
-     * Shortcut to ImGui::GetIO().MousePos provided by user, to be consistent with other calls
-     */
-    public static native float getMousePosX(); /*
-        return ImGui::GetMousePos().x;
-    */
-
-    /**
-     * Shortcut to ImGui::GetIO().MousePos provided by user, to be consistent with other calls
-     */
-    public static native float getMousePosY(); /*
-        return ImGui::GetMousePos().y;
-    */
+    @BindingMethod
+    public static native ImVec2 GetMousePos();
 
     /**
      * Retrieve backup of mouse position at the time of opening popup we have BeginPopup() into
      */
-    public static ImVec2 getMousePosOnOpeningCurrentPopup() {
-        final ImVec2 value = new ImVec2();
-        getMousePosOnOpeningCurrentPopup(value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec2 GetMousePosOnOpeningCurrentPopup();
 
     /**
-     * Retrieve backup of mouse position at the time of opening popup we have BeginPopup() into
+     * Is mouse dragging? (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
      */
-    public static native void getMousePosOnOpeningCurrentPopup(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetMousePosOnOpeningCurrentPopup(), dstImVec2);
-    */
-
-    /**
-     * Retrieve backup of mouse position at the time of opening popup we have BeginPopup() into
-     */
-    public static native float getMousePosOnOpeningCurrentPopupX(); /*
-        return ImGui::GetMousePosOnOpeningCurrentPopup().x;
-    */
-
-    /**
-     * Retrieve backup of mouse position at the time of opening popup we have BeginPopup() into
-     */
-    public static native float getMousePosOnOpeningCurrentPopupY(); /*
-        return ImGui::GetMousePosOnOpeningCurrentPopup().y;
-    */
+    @BindingMethod
+    public static native boolean IsMouseDragging(int button, @OptArg float lockThreshold);
 
     /**
      * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
+     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once (uses io.MouseDraggingThreshold if lock_threshold < 0.0f)
      */
-    public static ImVec2 getMouseDragDelta() {
-        final ImVec2 value = new ImVec2();
-        getMouseDragDelta(value);
-        return value;
-    }
+    @BindingMethod
+    public static native ImVec2 GetMouseDragDelta(@OptArg final int button, @OptArg final float lockThreshold);
+
+    @BindingMethod
+    public static native void ResetMouseDragDelta(@OptArg int button);
 
     /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native void getMouseDragDelta(ImVec2 dstImVec2); /*
-        Jni::ImVec2Cpy(env, ImGui::GetMouseDragDelta(), dstImVec2);
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaX(); /*
-        return ImGui::GetMouseDragDelta().x;
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaY(); /*
-        return ImGui::GetMouseDragDelta().y;
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static ImVec2 getMouseDragDelta(final int button) {
-        final ImVec2 value = new ImVec2();
-        getMouseDragDelta(value, button);
-        return value;
-    }
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native void getMouseDragDelta(ImVec2 dstImVec2, int button); /*
-        Jni::ImVec2Cpy(env, ImGui::GetMouseDragDelta(button), dstImVec2);
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaX(int button); /*
-        return ImGui::GetMouseDragDelta(button).x;
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaY(int button); /*
-        return ImGui::GetMouseDragDelta(button).y;
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static ImVec2 getMouseDragDelta(final int button, final float lockThreshold) {
-        final ImVec2 value = new ImVec2();
-        getMouseDragDelta(value, button, lockThreshold);
-        return value;
-    }
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native void getMouseDragDelta(ImVec2 dstImVec2, int button, float lockThreshold); /*
-        Jni::ImVec2Cpy(env, ImGui::GetMouseDragDelta(button, lockThreshold), dstImVec2);
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaX(int button, float lockThreshold); /*
-        return ImGui::GetMouseDragDelta(button, lockThreshold).x;
-    */
-
-    /**
-     * Return the delta from the initial clicking position while the mouse button is pressed or was just released.
-     * This is locked and return 0.0f until the mouse moves past a distance threshold at least once. If lockThreshold {@code < -1.0f} uses io.MouseDraggingThreshold.
-     */
-    public static native float getMouseDragDeltaY(int button, float lockThreshold); /*
-        return ImGui::GetMouseDragDelta(button, lockThreshold).y;
-    */
-
-    public static native void resetMouseDragDelta(); /*
-        ImGui::ResetMouseDragDelta();
-    */
-
-    public static native void resetMouseDragDelta(int button); /*
-        ImGui::ResetMouseDragDelta(button);
-    */
-
-    /**
-     * Get desired cursor type, reset in ImGui::NewFrame(), this is updated during the frame. valid before Render().
+     * Get desired mouse cursor shape. Important: reset in ImGui::NewFrame(), this is updated during the frame. valid before Render().
      * If you use software rendering by setting io.MouseDrawCursor ImGui will render those for you
      */
-    public static native int getMouseCursor(); /*
-        return ImGui::GetMouseCursor();
-    */
+    @BindingMethod
+    public static native int GetMouseCursor();
 
     /**
-     * Set desired cursor type
+     * Set desired mouse cursor shape
      */
-    public static native void setMouseCursor(int type); /*
-        ImGui::SetMouseCursor(type);
-    */
+    @BindingMethod
+    public static native void SetMouseCursor(int type);
 
     /**
-     * Attention: misleading name! manually override io.WantCaptureMouse flag next frame (said flag is entirely left for your application to handle).
-     * This is equivalent to setting "io.WantCaptureMouse = wantCaptureMouseValue;" after the next NewFrame() call.
+     *  Override io.WantCaptureMouse flag next frame (said flag is left for your application to handle,
+     *  typical when true it instucts your app to ignore inputs).
+     *  This is equivalent to setting "io.WantCaptureMouse = want_capture_mouse;" after the next NewFrame() call.
      */
-    public static native void captureMouseFromApp(); /*
-        ImGui::CaptureMouseFromApp();
-    */
-
-    /**
-     * Attention: misleading name! manually override io.WantCaptureMouse flag next frame (said flag is entirely left for your application to handle).
-     * This is equivalent to setting "io.WantCaptureMouse = wantCaptureMouseValue;" after the next NewFrame() call.
-     */
-    public static native void captureMouseFromApp(boolean wantCaptureMouseValue); /*
-        ImGui::CaptureMouseFromApp(wantCaptureMouseValue);
-    */
+    @BindingMethod
+    public static native void SetNextFrameWantCaptureMouse(boolean wantCaptureMouse);
 
     // Clipboard Utilities
     // - Also see the LogToClipboard() function to capture GUI into clipboard, or easily output text data to the clipboard.
 
-    public static native String getClipboardText(); /*
-        return env->NewStringUTF(ImGui::GetClipboardText());
-    */
+    @BindingMethod
+    public static native String GetClipboardText();
 
-    public static native void setClipboardText(String text); /*
-        ImGui::SetClipboardText(text);
-    */
+    @BindingMethod
+    public static native void SetClipboardText(String text);
 
     // Settings/.Ini Utilities
     // - The disk functions are automatically called if io.IniFilename != NULL (default is "imgui.ini").
@@ -6055,46 +2909,42 @@ public class ImGui {
     /**
      * Call after CreateContext() and before the first call to NewFrame(). NewFrame() automatically calls LoadIniSettingsFromDisk(io.IniFilename).
      */
-    public static native void loadIniSettingsFromDisk(String iniFilename); /*
-        ImGui::LoadIniSettingsFromDisk(iniFilename);
-    */
+    @BindingMethod
+    public static native void LoadIniSettingsFromDisk(String iniFilename);
 
     /**
      * Call after CreateContext() and before the first call to NewFrame() to provide .ini data from your own data source.
      */
-    public static native void loadIniSettingsFromMemory(String iniData); /*
-        ImGui::LoadIniSettingsFromMemory(iniData);
-    */
-
-    /**
-     * Call after CreateContext() and before the first call to NewFrame() to provide .ini data from your own data source.
-     */
-    public static native void loadIniSettingsFromMemory(String iniData, int iniSize); /*
-        ImGui::LoadIniSettingsFromMemory(iniData, iniSize);
-    */
+    @BindingMethod
+    public static native void LoadIniSettingsFromMemory(String iniData, @OptArg int iniSize);
 
     /**
      * This is automatically called (if io.IniFilename is not empty) a few seconds after any modification that should be reflected in the .ini file (and also by DestroyContext).
      */
-    public static native void saveIniSettingsToDisk(String iniFilename); /*
-        ImGui::SaveIniSettingsToDisk(iniFilename);
-    */
+    @BindingMethod
+    public static native void SaveIniSettingsToDisk(String iniFilename);
 
     /**
      * Return a zero-terminated string with the .ini data which you can save by your own mean.
      * Call when io.WantSaveIniSettings is set, then save data by your own mean and clear io.WantSaveIniSettings.
      */
-    public static native String saveIniSettingsToMemory(); /*
-        return env->NewStringUTF(ImGui::SaveIniSettingsToMemory());
-    */
+    @BindingMethod
+    public static native String SaveIniSettingsToMemory(@OptArg @ArgValue(callPrefix = "(size_t*)&") long outIniSize);
 
-    /**
-     * Return a zero-terminated string with the .ini data which you can save by your own mean.
-     * Call when io.WantSaveIniSettings is set, then save data by your own mean and clear io.WantSaveIniSettings.
-     */
-    public static native String saveIniSettingsToMemory(long outIniSize); /*
-        return env->NewStringUTF(ImGui::SaveIniSettingsToMemory((size_t*)&outIniSize));
-    */
+    // Debug Utilities
+    // - Your main debugging friend is the ShowMetricsWindow() function, which is also accessible from Demo->Tools->Metrics Debugger
+
+    @BindingMethod
+    public static native void DebugTextEncoding(String text);
+
+    @BindingMethod
+    public static native void DebugFlashStyleColor(@ArgValue(staticCast = "ImGuiCol") int idx);
+
+    @BindingMethod
+    public static native void DebugStartItemPicker();
+
+    @BindingMethod
+    public static native boolean DebugCheckVersionAndDataLayout(String versionStr, int szIo, int szStyle, int szVec2, int szVec4, int szDrawVert, int szDrawIdx);
 
     // (Optional) Platform/OS interface for multi-viewport support
     // Read comments around the ImGuiPlatformIO structure for more details.
@@ -6103,60 +2953,40 @@ public class ImGui {
     /**
      * Platform/renderer functions, for backend to setup + viewports list.
      */
-    public static ImGuiPlatformIO getPlatformIO() {
-        PLATFORM_IO.ptr = nGetPlatformIO();
-        return PLATFORM_IO;
-    }
-
-    private static native long nGetPlatformIO(); /*
-        return (intptr_t)&ImGui::GetPlatformIO();
-    */
+    @BindingMethod
+    @ReturnValue(isStatic = true, callPrefix = "&")
+    public static native ImGuiPlatformIO GetPlatformIO();
 
     /**
      * Call in main loop. Will call CreateWindow/ResizeWindow/etc. Platform functions for each secondary viewport, and DestroyWindow for each inactive viewport.
      */
-    public static native void updatePlatformWindows(); /*
-        ImGui::UpdatePlatformWindows();
-    */
+    @BindingMethod
+    public static native void UpdatePlatformWindows();
 
     /**
-     *  Call in main loop. will call RenderWindow/SwapBuffers platform functions for each secondary viewport which doesn't have the ImGuiViewportFlags_Minimized flag set.
-     *  May be reimplemented by user for custom rendering needs.
+     * Call in main loop. will call RenderWindow/SwapBuffers platform functions for each secondary viewport which doesn't have the ImGuiViewportFlags_Minimized flag set.
+     * May be reimplemented by user for custom rendering needs.
      */
-    public static native void renderPlatformWindowsDefault(); /*
-        ImGui::RenderPlatformWindowsDefault();
-    */
+    @BindingMethod
+    public static native void RenderPlatformWindowsDefault();
 
     /**
      * Call DestroyWindow platform functions for all viewports.
      * Call from backend Shutdown() if you need to close platform windows before imgui shutdown.
      * Otherwise will be called by DestroyContext().
      */
-    public static native void destroyPlatformWindows(); /*
-        ImGui::DestroyPlatformWindows();
-    */
+    @BindingMethod
+    public static native void DestroyPlatformWindows();
 
     /**
      * This is a helper for backends.
      */
-    public static ImGuiViewport findViewportByID(int imGuiID) {
-        FIND_VIEWPORT.ptr = nFindViewportByID(imGuiID);
-        return FIND_VIEWPORT;
-    }
-
-    private static native long nFindViewportByID(int imGuiID); /*
-        return (intptr_t)ImGui::FindViewportByID(imGuiID);
-    */
+    @BindingMethod
+    public static native ImGuiViewport FindViewportByID(int imGuiID);
 
     /**
      * This is a helper for backends. The type platform_handle is decided by the backend (e.g. HWND, MyWindow*, GLFWwindow* etc.)
      */
-    public static ImGuiViewport findViewportByPlatformHandle(long platformHandle) {
-        FIND_VIEWPORT.ptr = nFindViewportByPlatformHandle(platformHandle);
-        return FIND_VIEWPORT;
-    }
-
-    private static native long nFindViewportByPlatformHandle(long platformHandle); /*
-        return (intptr_t)ImGui::FindViewportByPlatformHandle((void*)platformHandle);
-    */
+    @BindingMethod
+    public static native ImGuiViewport FindViewportByPlatformHandle(@ArgValue(callPrefix = "(void*)") long platformHandle);
 }

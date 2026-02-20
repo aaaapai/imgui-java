@@ -1,51 +1,20 @@
 package imgui.flag;
 
+import imgui.binding.annotation.BindingAstEnum;
+import imgui.binding.annotation.BindingSource;
+
 /**
- * User fill ImGuiIO.KeyMap[] array with indices into the ImGuiIO.KeysDown[512] array
+ * A key identifier (ImGuiKey_XXX or ImGuiMod_XXX value): can represent Keyboard, Mouse and Gamepad values.
+ * All our named keys are {@code >=} 512. Keys value 0 to 511 are left unused as legacy native/opaque key values ({@code <} 1.87).
+ * Since {@code >=} 1.89 we increased typing (went from int to enum), some legacy code may need a cast to ImGuiKey.
+ * Read details about the 1.87 and 1.89 transition : https://github.com/ocornut/imgui/issues/4921
+ * Note that "Keys" related to physical keys and are not the same concept as input "Characters", the later are submitted via io.AddInputCharacter().
  */
+@BindingSource
 public final class ImGuiKey {
     private ImGuiKey() {
     }
 
-    public static final int Tab = 0;
-    public static final int LeftArrow = 1;
-    public static final int RightArrow = 2;
-    public static final int UpArrow = 3;
-    public static final int DownArrow = 4;
-    public static final int PageUp = 5;
-    public static final int PageDown = 6;
-    public static final int Home = 7;
-    public static final int End = 8;
-    public static final int Insert = 9;
-    public static final int Delete = 10;
-    public static final int Backspace = 11;
-    public static final int Space = 12;
-    public static final int Enter = 13;
-    public static final int Escape = 14;
-    public static final int KeyPadEnter = 15;
-    /**
-     * for text edit CTRL+A: select all
-     */
-    public static final int A = 16;
-    /**
-     * for text edit CTRL+C: copy
-     */
-    public static final int C = 17;
-    /**
-     * for text edit CTRL+V: paste
-     */
-    public static final int V = 18;
-    /**
-     * for text edit CTRL+X: cut
-     */
-    public static final int X = 19;
-    /**
-     * for text edit CTRL+Y: redo
-     */
-    public static final int Y = 20;
-    /**
-     * for text edit CTRL+Z: undo
-     */
-    public static final int Z = 21;
-    public static final int COUNT = 22;
+    @BindingAstEnum(file = "ast-imgui.json", qualType = "ImGuiKey", sanitizeName = "ImGuiKey_")
+    public Void __;
 }

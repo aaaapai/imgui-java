@@ -1,5 +1,7 @@
 #include "jni_jvm.h"
 
+#define JNI_VERSION_1_8 0x00010008
+
 static JavaVM* jvm;
 
 namespace Jni

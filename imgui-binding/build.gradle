@@ -1,9 +1,9 @@
 import org.apache.tools.ant.filters.ReplaceTokens
 import tool.generator.GenerateLibs
+import tool.generator.api.task.GenerateApi
 
 plugins {
     id 'java'
-    id 'checkstyle'
     id 'maven-publish'
     id 'signing'
 }
@@ -15,13 +15,28 @@ java {
 }
 
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.3'
-    testImplementation 'org.junit.jupiter:junit-jupiter-engine:5.10.3'
+    testImplementation("org.junit.jupiter:junit-jupiter-api:5.13.4")
+    testImplementation("org.junit.jupiter:junit-jupiter-engine:5.13.4")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 test {
     useJUnitPlatform()
 }
+
+compileJava {
+    // By default we do not generate API, since we believe this should be done on purpose.
+    if (System.getProperty('build.debug.generate.api.enable')) {
+        dependsOn 'generateApi'
+    }
+}
+
+sourceSets {
+    main.java.srcDirs = ['src/generated/java']
+    raw.java.srcDirs = ['src/main/java']
+}
+
+tasks.register('generateApi', GenerateApi)
 
 tasks.register('generateLibs', GenerateLibs) {
     it.dependsOn assemble
@@ -39,7 +54,7 @@ jar {
 processResources {
     filesMatching('**/imgui-java.properties') {
         filter(ReplaceTokens, tokens: [
-                'version': project.version
+                'version': version
         ])
     }
 }
