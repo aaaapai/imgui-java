@@ -18,9 +18,15 @@ jobs:
       matrix:
         target:
           - os: ubuntu-latest
-            type: android-arm64
-     runs-on: ${{ matrix.target.os }}
-     steps:
+            type: linux
+          - os: ubuntu-latest
+            type: android
+          - os: ubuntu-latest
+            type: windows
+          - os: macos-latest
+            type: macos
+    runs-on: ${{ matrix.target.os }}
+    steps:
       - name: Checkout Repository and Submodules
         uses: actions/checkout@v5
         with:
@@ -63,6 +69,7 @@ jobs:
       - name: Build (for non-Android)
         if: matrix.target.type != 'android-arm64'
         run: |
+          export NDK_HOME=$ANDROID_NDK_HOME
           chmod +x buildSrc/scripts/build.sh
           buildSrc/scripts/build.sh ${{ matrix.target.type }}
 

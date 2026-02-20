@@ -32,6 +32,7 @@ class GenerateLibs extends DefaultTask {
     private final String[] buildEnvs = System.getProperty('envs')?.split(',')
     private final boolean forWindows = buildEnvs?.contains('windows')
     private final boolean forLinux = buildEnvs?.contains('linux')
+    private final boolean forAndroid = buildEnvs?.contains('android')
     private final boolean forMac = buildEnvs?.contains('macos')
     private final boolean forMacArm64 = buildEnvs?.contains('macosarm64')
     private final boolean forAndroidAarch64 = buildEnvs?.contains('androidaarch64')
@@ -119,6 +120,18 @@ class GenerateLibs extends DefaultTask {
             buildTargets += linux64
         }
 
+        if (forAndroid) {
+            def androidTarget = BuildTarget.newDefaultTarget(BuildTarget.TargetOs.Android, true)
+            // Needed for ImPlot::AnnotateClamped
+            androidTarget.cFlags += " -Wno-format-security"
+            androidTarget.cppFlags += " -Wno-format-security"
+            // Needed for TextEditor and ImGuiFileDialog
+            androidTarget.androidApplicationMk += ["APP_STL := c++_static"]
+            androidTarget.androidABIs = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"] // TODO: Add riscv64
+            addFreeTypeIfEnabled(androidTarget)
+            buildTargets += androidTarget
+        }
+
         if (forMac) {
             buildTargets += createMacTarget(Architecture.x86)
         }
@@ -146,15 +159,15 @@ class GenerateLibs extends DefaultTask {
             BuildExecutor.executeAnt(jniDir + '/build-windows64.xml', commonParams)
         if (forLinux)
             BuildExecutor.executeAnt(jniDir + '/build-linux64.xml', commonParams)
+        if (forAndroid) // Contrary to the name, this builds all four ABIs (arm64, arm, x86, x86_64)
+            BuildExecutor.executeAnt(jniDir + '/build-android32.xml', commonParams)
         if (forMac)
             BuildExecutor.executeAnt(jniDir + '/build-macosx64.xml', commonParams)
         if (forMacArm64)
             BuildExecutor.executeAnt(jniDir + '/build-macosxarm64.xml', commonParams)
-        if (forAndroidAarch64) {
-            BuildExecutor.executeAnt(jniDir + '/build-android32.xml', commonParams)
-        }
-
-        BuildExecutor.executeAnt(jniDir + '/build.xml', '-v', 'pack-natives')
+        // Exclude android because android packages into aar, not jar
+        if (!forAndroid)
+            BuildExecutor.executeAnt(jniDir + '/build.xml', '-v', 'pack-natives')
 
         if (forWindows)
             checkLibExist("windows64/imgui-java64.dll")
@@ -199,8 +212,10 @@ class GenerateLibs extends DefaultTask {
         }
 
         target.cppFlags += " -I$freetypeVendorDir/include"
-        target.linkerFlags += " -L${project.rootProject.file("$freetypeVendorDir/lib")}"
-        target.libraries += ' -lfreetype'
+        if (forAndroid) {
+            target.linkerFlags += " -L${project.rootProject.file("$freetypeVendorDir/lib/\$(TARGET_ARCH_ABI)")}"
+        } else target.linkerFlags += " -L${project.rootProject.file("$freetypeVendorDir/lib")}"
+        target.linkerFlags += ' -lfreetype'
     }
 
     void replaceSourceFileContent(String fileName, String replaceWhat, String replaceWith) {
